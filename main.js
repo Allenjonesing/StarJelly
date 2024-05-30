@@ -41,39 +41,54 @@ class Blob {
     constructor(x, y, size, isActive = false) {
         this.size = size;
         this.isActive = isActive;
-        this.parts = [];
-        this.body = this.createBlob(x, y, size);
+        this.body = this.createSoftBody(x, y, 5, 5, size / 20, 5, { stiffness: 0.5, damping: 0.1 });
         this.face = '😃';
         Composite.add(world, this.body);
     }
 
-    createBlob(x, y, size) {
-        const parts = [];
-        const radius = size / 10;
-        for (let i = 0; i < size; i++) {
-            const angle = Math.PI * 2 * (i / size);
-            const px = x + Math.cos(angle) * radius;
-            const py = y + Math.sin(angle) * radius;
-            const part = Bodies.circle(px, py, radius / 2, { inertia: Infinity, frictionAir: 0.1 });
-            parts.push(part);
+    createSoftBody(x, y, columns, rows, columnGap, rowGap, options) {
+        const group = Body.nextGroup(true);
+        const softBody = Composite.create({ label: 'Soft Body' });
+
+        const particleOptions = Object.assign({ inertia: Infinity, friction: 0.1, frictionAir: 0.05, collisionFilter: { group: group }, render: { visible: true } }, options);
+
+        const constraintOptions = Object.assign({ stiffness: 0.2, damping: 0.1 }, options);
+
+        let particles = [];
+
+        for (let row = 0; row < rows; row++) {
+            for (let column = 0; column < columns; column++) {
+                const particle = Bodies.circle(x + column * columnGap, y + row * rowGap, columnGap * 0.5, particleOptions);
+                Composite.add(softBody, particle);
+                particles.push(particle);
+
+                if (column > 0) {
+                    const constraint = Constraint.create(Object.assign({
+                        bodyA: particles[particles.length - 2],
+                        bodyB: particle,
+                        length: columnGap
+                    }, constraintOptions));
+                    Composite.add(softBody, constraint);
+                }
+
+                if (row > 0) {
+                    const constraint = Constraint.create(Object.assign({
+                        bodyA: particles[column + (row - 1) * columns],
+                        bodyB: particle,
+                        length: rowGap
+                    }, constraintOptions));
+                    Composite.add(softBody, constraint);
+                }
+            }
         }
 
-        this.parts = parts;
-        const constraints = parts.map(part => Constraint.create({
-            bodyA: part,
-            bodyB: parts[0],
-            stiffness: 0.5,
-            damping: 0.1
-        }));
+        softBody.particles = particles;
 
-        return Composite.create({
-            bodies: parts,
-            constraints: constraints
-        });
+        return softBody;
     }
 
     draw() {
-        this.parts.forEach(part => {
+        this.body.bodies.forEach(part => {
             const pos = part.position;
             const angle = part.angle;
             ctx.save();
@@ -119,7 +134,7 @@ function gameLoop() {
 function drawHUD() {
     ctx.font = '20px Arial';
     ctx.fillStyle = 'white';
-    ctx.fillText(`HP: ${currentBlob.parts.length}`, 20, 30);
+    ctx.fillText(`HP: ${currentBlob.body.bodies.length}`, 20, 30);
 }
 
 function checkBlobCollisions() {
@@ -140,14 +155,10 @@ function isColliding(bodyA, bodyB) {
 }
 
 function mergeBlobs(mainBlob, otherBlob) {
-    otherBlob.parts.forEach(part => {
+    otherBlob.body.bodies.forEach(part => {
         Composite.remove(world, part);
-        mainBlob.parts.push(part);
+        mainBlob.body.bodies.push(part);
         Composite.add(world, part);
-    });
-    mainBlob.body = Composite.create({
-        bodies: mainBlob.parts,
-        constraints: mainBlob.body.constraints
     });
     mainBlob.size += otherBlob.size;
 }
@@ -168,7 +179,7 @@ Events.on(mouseConstraint, 'mousedown', (event) => {
 
     if (currentBlob && isInsideBlob(x, y, currentBlob)) {
         isDragging = true;
-    } else if (currentBlob && currentBlob.parts.length >= MINIMUM_SHOOT_SIZE) {
+    } else if (currentBlob && currentBlob.body.bodies.length >= MINIMUM_SHOOT_SIZE) {
         isShooting = true;
         startShooting(mouse.position.x, mouse.position.y);
     }
@@ -181,7 +192,7 @@ Events.on(mouseConstraint, 'mousemove', (event) => {
 
         // Prevent floating by only allowing horizontal movement
         const currentY = currentBlob.body.bodies[0].position.y;
-        currentBlob.parts.forEach(part => {
+        currentBlob.body.bodies.forEach(part => {
             Body.setPosition(part, { x: x, y: currentY });
         });
     }
@@ -193,7 +204,7 @@ Events.on(mouseConstraint, 'mouseup', () => {
 });
 
 canvas.addEventListener('click', (e) => {
-    if (!isDragging && currentBlob && currentBlob.parts.length >= MINIMUM_SHOOT_SIZE) {
+    if (!isDragging && currentBlob && currentBlob.body.bodies.length >= MINIMUM_SHOOT_SIZE) {
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -208,7 +219,7 @@ function isInsideBlob(x, y, blob) {
 }
 
 function shootStream(targetX, targetY) {
-    if (currentBlob.parts.length <= MINIMUM_ALIVE_SIZE) return;
+    if (currentBlob.body.bodies.length <= MINIMUM_ALIVE_SIZE) return;
 
     const { x, y } = currentBlob.body.bodies[0].position;
     const angle = Math.atan2(targetY - y, targetX - x);
@@ -225,10 +236,10 @@ function shootStream(targetX, targetY) {
 
     currentBlob.size -= streamSize;
     for (let i = 0; i < streamSize; i++) {
-        Composite.remove(world, currentBlob.parts.pop());
+        Composite.remove(world, currentBlob.body.bodies.pop());
     }
 
-    if (currentBlob.parts.length < MINIMUM_ALIVE_SIZE) {
+    if (currentBlob.body.bodies.length < MINIMUM_ALIVE_SIZE) {
         alert('Game Over!');
         resetGame();
     }
@@ -236,7 +247,7 @@ function shootStream(targetX, targetY) {
 
 function startShooting(targetX, targetY) {
     const shoot = () => {
-        if (isShooting && currentBlob.parts.length >= MINIMUM_SHOOT_SIZE) {
+        if (isShooting && currentBlob.body.bodies.length >= MINIMUM_SHOOT_SIZE) {
             shootStream(targetX, targetY);
             setTimeout(shoot, STREAM_INTERVAL);
         }
