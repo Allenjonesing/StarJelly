@@ -29,7 +29,7 @@ let currentBlob = null;
 let isDragging = false;
 let isShooting = false;
 
-const INITIAL_BLOB_SIZE = 20;
+const INITIAL_BLOB_SIZE = 50;
 const MINIMUM_SHOOT_SIZE = 20; // Twice the minimum size to be alive (10)
 const STREAM_INTERVAL = 100; // Interval in milliseconds for shooting stream
 
