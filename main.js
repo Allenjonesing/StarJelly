@@ -205,19 +205,16 @@ function shootStream(targetX, targetY) {
     const streamX = x + Math.cos(angle) * currentBlob.size;
     const streamY = y + Math.sin(angle) * currentBlob.size;
     const streamBlob = new Blob(streamX, streamY, streamSize);
-    Body.setVelocity(streamBlob.body, {
+    Body.setVelocity(streamBlob.body.bodies[0], {
         x: Math.cos(angle) * 5,
         y: Math.sin(angle) * 5
     });
     blobs.push(streamBlob);
 
     currentBlob.size -= streamSize;
-    currentBlob.parts.splice(0, streamSize);
-    currentBlob.body = Composite.create({
-        bodies: currentBlob.parts,
-        constraints: currentBlob.body.constraints
-    });
-    Composite.add(world, currentBlob.body);
+    for (let i = 0; i < streamSize; i++) {
+        Composite.remove(world, currentBlob.parts.pop());
+    }
 
     if (currentBlob.parts.length < MINIMUM_ALIVE_SIZE) {
         alert('Game Over!');
