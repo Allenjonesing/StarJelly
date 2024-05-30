@@ -1,4 +1,4 @@
-const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events } = Matter;
+const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Vector } = Matter;
 
 const canvas = document.getElementById('gameCanvas');
 const engine = Engine.create();
@@ -25,6 +25,10 @@ Runner.run(runner, engine);
 let blobs = [];
 let currentBlob = null;
 let isDragging = false;
+let isShooting = false;
+
+const INITIAL_BLOB_SIZE = 20;
+const MINIMUM_SHOOT_SIZE = 20; // Twice the minimum size to be alive (10)
 
 class Blob {
     constructor(x, y, size, isActive = false) {
@@ -48,7 +52,6 @@ class Blob {
         ctx.fill();
         ctx.closePath();
 
-        // Draw face on the active blob
         if (this.isActive) {
             ctx.font = '20px Arial';
             ctx.fillStyle = 'black';
@@ -62,7 +65,7 @@ function init() {
     const ground = Bodies.rectangle(canvas.width / 2, canvas.height - 50, canvas.width, 20, { isStatic: true });
     Composite.add(world, ground);
 
-    currentBlob = new Blob(100, 100, 20, true);
+    currentBlob = new Blob(100, 100, INITIAL_BLOB_SIZE, true);
     blobs.push(currentBlob);
     gameLoop();
 }
@@ -90,6 +93,8 @@ Events.on(mouseConstraint, 'mousedown', (event) => {
 
     if (currentBlob && isInsideBlob(x, y, currentBlob)) {
         isDragging = true;
+    } else if (currentBlob && currentBlob.size >= MINIMUM_SHOOT_SIZE) {
+        isShooting = true;
     }
 });
 
@@ -99,18 +104,29 @@ Events.on(mouseConstraint, 'mousemove', (event) => {
         const x = mouse.position.x;
         const y = mouse.position.y;
 
-        Matter.Body.setPosition(currentBlob.body, { x: x, y: y });
+        if (y > currentBlob.body.position.y) {
+            Matter.Body.setPosition(currentBlob.body, { x: x, y: y });
+        }
     }
 });
 
-Events.on(mouseConstraint, 'mouseup', (event) => {
+Events.on(mouseConstraint, 'mouseup', () => {
     isDragging = false;
+    isShooting = false;
+});
+
+Events.on(mouseConstraint, 'tick', (event) => {
+    if (isShooting && currentBlob.size >= MINIMUM_SHOOT_SIZE) {
+        shootStream();
+    }
 });
 
 canvas.addEventListener('click', (e) => {
-    if (!isDragging && currentBlob) {
+    if (!isDragging && currentBlob && currentBlob.size >= MINIMUM_SHOOT_SIZE) {
         const rect = canvas.getBoundingClientRect();
-        shootStream(e.clientX - rect.left, e.clientY - rect.top);
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        shootStream(x, y);
     }
 });
 
@@ -121,16 +137,18 @@ function isInsideBlob(x, y, blob) {
 }
 
 function shootStream(targetX, targetY) {
+    if (currentBlob.size <= 2 * MINIMUM_SHOOT_SIZE) return;
+
     const { x, y } = currentBlob.body.position;
     const angle = Math.atan2(targetY - y, targetX - x);
 
-    const streamSize = 5;
+    const streamSize = 2;
     const streamX = x + Math.cos(angle) * currentBlob.size;
     const streamY = y + Math.sin(angle) * currentBlob.size;
     const streamBlob = new Blob(streamX, streamY, streamSize);
     Matter.Body.setVelocity(streamBlob.body, {
-        x: Math.cos(angle) * 10,
-        y: Math.sin(angle) * 10
+        x: Math.cos(angle) * 5,
+        y: Math.sin(angle) * 5
     });
     blobs.push(streamBlob);
 
@@ -149,7 +167,7 @@ function resetGame() {
     blobs = [];
     const ground = Bodies.rectangle(canvas.width / 2, canvas.height - 50, canvas.width, 20, { isStatic: true });
     Composite.add(world, ground);
-    currentBlob = new Blob(100, 100, 20, true);
+    currentBlob = new Blob(100, 100, INITIAL_BLOB_SIZE, true);
     blobs.push(currentBlob);
     Composite.add(world, mouseConstraint);
 }
