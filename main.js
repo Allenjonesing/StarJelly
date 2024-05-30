@@ -29,81 +29,37 @@ let currentBlob = null;
 let isDragging = false;
 let isShooting = false;
 
-const INITIAL_BLOB_SIZE = 100;
-const MINIMUM_ALIVE_SIZE = 10;
-const MINIMUM_SHOOT_SIZE = 20;
+const INITIAL_BLOB_RADIUS = 50;
+const MINIMUM_ALIVE_RADIUS = 10;
+const MINIMUM_SHOOT_RADIUS = 20;
 const STREAM_INTERVAL = 100;
 const GRAVITY_SCALE = 1;
 
 engine.world.gravity.y = GRAVITY_SCALE;
 
 class Blob {
-    constructor(x, y, size, isActive = false) {
-        this.size = size;
+    constructor(x, y, radius, isActive = false) {
+        this.radius = radius;
         this.isActive = isActive;
-        this.body = this.createSoftBody(x, y, 5, 5, size / 20, 5, { stiffness: 0.5, damping: 0.1 });
+        this.body = Bodies.circle(x, y, radius, { inertia: Infinity, frictionAir: 0.1 });
         this.face = '😃';
         Composite.add(world, this.body);
     }
 
-    createSoftBody(x, y, columns, rows, columnGap, rowGap, options) {
-        const group = Body.nextGroup(true);
-        const softBody = Composite.create({ label: 'Soft Body' });
-
-        const particleOptions = Object.assign({ inertia: Infinity, friction: 0.1, frictionAir: 0.05, collisionFilter: { group: group }, render: { visible: true } }, options);
-
-        const constraintOptions = Object.assign({ stiffness: 0.2, damping: 0.1 }, options);
-
-        let particles = [];
-
-        for (let row = 0; row < rows; row++) {
-            for (let column = 0; column < columns; column++) {
-                const particle = Bodies.circle(x + column * columnGap, y + row * rowGap, columnGap * 0.5, particleOptions);
-                Composite.add(softBody, particle);
-                particles.push(particle);
-
-                if (column > 0) {
-                    const constraint = Constraint.create(Object.assign({
-                        bodyA: particles[particles.length - 2],
-                        bodyB: particle,
-                        length: columnGap
-                    }, constraintOptions));
-                    Composite.add(softBody, constraint);
-                }
-
-                if (row > 0) {
-                    const constraint = Constraint.create(Object.assign({
-                        bodyA: particles[column + (row - 1) * columns],
-                        bodyB: particle,
-                        length: rowGap
-                    }, constraintOptions));
-                    Composite.add(softBody, constraint);
-                }
-            }
-        }
-
-        softBody.particles = particles;
-
-        return softBody;
-    }
-
     draw() {
-        this.body.bodies.forEach(part => {
-            const pos = part.position;
-            const angle = part.angle;
-            ctx.save();
-            ctx.translate(pos.x, pos.y);
-            ctx.rotate(angle);
-            ctx.beginPath();
-            ctx.arc(0, 0, part.circleRadius, 0, Math.PI * 2);
-            ctx.fillStyle = this.isActive ? 'green' : 'blue';
-            ctx.fill();
-            ctx.closePath();
-            ctx.restore();
-        });
+        const pos = this.body.position;
+        const angle = this.body.angle;
+        ctx.save();
+        ctx.translate(pos.x, pos.y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.arc(0, 0, this.body.circleRadius, 0, Math.PI * 2);
+        ctx.fillStyle = this.isActive ? 'green' : 'blue';
+        ctx.fill();
+        ctx.closePath();
+        ctx.restore();
 
         if (this.isActive) {
-            const pos = this.body.bodies[0].position;
             ctx.font = '20px Arial';
             ctx.fillStyle = 'black';
             ctx.fillText(this.face, pos.x - 10, pos.y + 5);
@@ -117,7 +73,7 @@ function init() {
     const rightWall = Bodies.rectangle(canvas.width - 30, canvas.height / 2, 60, canvas.height, { isStatic: true });
     Composite.add(world, [ground, leftWall, rightWall]);
 
-    currentBlob = new Blob(100, 100, INITIAL_BLOB_SIZE, true);
+    currentBlob = new Blob(100, 100, INITIAL_BLOB_RADIUS, true);
     blobs.push(currentBlob);
     gameLoop();
 }
@@ -134,7 +90,7 @@ function gameLoop() {
 function drawHUD() {
     ctx.font = '20px Arial';
     ctx.fillStyle = 'white';
-    ctx.fillText(`HP: ${currentBlob.body.bodies.length}`, 20, 30);
+    ctx.fillText(`HP: ${currentBlob.body.circleRadius.toFixed(2)}`, 20, 30);
 }
 
 function checkBlobCollisions() {
@@ -148,19 +104,22 @@ function checkBlobCollisions() {
 }
 
 function isColliding(bodyA, bodyB) {
-    const dx = bodyA.bodies[0].position.x - bodyB.bodies[0].position.x;
-    const dy = bodyA.bodies[0].position.y - bodyB.bodies[0].position.y;
+    const dx = bodyA.position.x - bodyB.position.x;
+    const dy = bodyA.position.y - bodyB.position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < bodyA.bodies[0].circleRadius + bodyB.bodies[0].circleRadius;
+    return distance < bodyA.circleRadius + bodyB.circleRadius;
 }
 
 function mergeBlobs(mainBlob, otherBlob) {
-    otherBlob.body.bodies.forEach(part => {
-        Composite.remove(world, part);
-        mainBlob.body.bodies.push(part);
-        Composite.add(world, part);
-    });
-    mainBlob.size += otherBlob.size;
+    const mainRadius = Math.pow(mainBlob.body.circleRadius, 2);
+    const otherRadius = Math.pow(otherBlob.body.circleRadius, 2);
+    const newRadius = Math.sqrt(mainRadius + otherRadius);
+    
+    Composite.remove(world, mainBlob.body);
+    Composite.remove(world, otherBlob.body);
+
+    mainBlob.body = Bodies.circle(mainBlob.body.position.x, mainBlob.body.position.y, newRadius, { inertia: Infinity, frictionAir: 0.1 });
+    Composite.add(world, mainBlob.body);
 }
 
 const mouse = Mouse.create(canvas);
@@ -179,7 +138,7 @@ Events.on(mouseConstraint, 'mousedown', (event) => {
 
     if (currentBlob && isInsideBlob(x, y, currentBlob)) {
         isDragging = true;
-    } else if (currentBlob && currentBlob.body.bodies.length >= MINIMUM_SHOOT_SIZE) {
+    } else if (currentBlob && currentBlob.body.circleRadius >= MINIMUM_SHOOT_RADIUS) {
         isShooting = true;
         startShooting(mouse.position.x, mouse.position.y);
     }
@@ -191,10 +150,8 @@ Events.on(mouseConstraint, 'mousemove', (event) => {
         const x = mouse.position.x;
 
         // Prevent floating by only allowing horizontal movement
-        const currentY = currentBlob.body.bodies[0].position.y;
-        currentBlob.body.bodies.forEach(part => {
-            Body.setPosition(part, { x: x, y: currentY });
-        });
+        const currentY = currentBlob.body.position.y;
+        Body.setPosition(currentBlob.body, { x: x, y: currentY });
     }
 });
 
@@ -204,7 +161,7 @@ Events.on(mouseConstraint, 'mouseup', () => {
 });
 
 canvas.addEventListener('click', (e) => {
-    if (!isDragging && currentBlob && currentBlob.body.bodies.length >= MINIMUM_SHOOT_SIZE) {
+    if (!isDragging && currentBlob && currentBlob.body.circleRadius >= MINIMUM_SHOOT_RADIUS) {
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -213,33 +170,33 @@ canvas.addEventListener('click', (e) => {
 });
 
 function isInsideBlob(x, y, blob) {
-    const dx = x - blob.body.bodies[0].position.x;
-    const dy = y - blob.body.bodies[0].position.y;
-    return Math.sqrt(dx * dx + dy * dy) < blob.size;
+    const dx = x - blob.body.position.x;
+    const dy = y - blob.body.position.y;
+    return Math.sqrt(dx * dx + dy * dy) < blob.body.circleRadius;
 }
 
 function shootStream(targetX, targetY) {
-    if (currentBlob.body.bodies.length <= MINIMUM_ALIVE_SIZE) return;
+    if (currentBlob.body.circleRadius <= MINIMUM_ALIVE_RADIUS) return;
 
-    const { x, y } = currentBlob.body.bodies[0].position;
+    const { x, y } = currentBlob.body.position;
     const angle = Math.atan2(targetY - y, targetX - x);
 
-    const streamSize = 2;
-    const streamX = x + Math.cos(angle) * currentBlob.size;
-    const streamY = y + Math.sin(angle) * currentBlob.size;
-    const streamBlob = new Blob(streamX, streamY, streamSize);
-    Body.setVelocity(streamBlob.body.bodies[0], {
+    const streamRadius = MINIMUM_SHOOT_RADIUS / 2;
+    const streamX = x + Math.cos(angle) * currentBlob.body.circleRadius;
+    const streamY = y + Math.sin(angle) * currentBlob.body.circleRadius;
+    const streamBlob = new Blob(streamX, streamY, streamRadius);
+    Body.setVelocity(streamBlob.body, {
         x: Math.cos(angle) * 5,
         y: Math.sin(angle) * 5
     });
     blobs.push(streamBlob);
 
-    currentBlob.size -= streamSize;
-    for (let i = 0; i < streamSize; i++) {
-        Composite.remove(world, currentBlob.body.bodies.pop());
-    }
+    const newRadius = Math.sqrt(Math.pow(currentBlob.body.circleRadius, 2) - Math.pow(streamRadius, 2));
+    Composite.remove(world, currentBlob.body);
+    currentBlob.body = Bodies.circle(x, y, newRadius, { inertia: Infinity, frictionAir: 0.1 });
+    Composite.add(world, currentBlob.body);
 
-    if (currentBlob.body.bodies.length < MINIMUM_ALIVE_SIZE) {
+    if (currentBlob.body.circleRadius < MINIMUM_ALIVE_RADIUS) {
         alert('Game Over!');
         resetGame();
     }
@@ -247,7 +204,7 @@ function shootStream(targetX, targetY) {
 
 function startShooting(targetX, targetY) {
     const shoot = () => {
-        if (isShooting && currentBlob.body.bodies.length >= MINIMUM_SHOOT_SIZE) {
+        if (isShooting && currentBlob.body.circleRadius >= MINIMUM_SHOOT_RADIUS) {
             shootStream(targetX, targetY);
             setTimeout(shoot, STREAM_INTERVAL);
         }
@@ -262,7 +219,7 @@ function resetGame() {
     const leftWall = Bodies.rectangle(30, canvas.height / 2, 60, canvas.height, { isStatic: true });
     const rightWall = Bodies.rectangle(canvas.width - 30, canvas.height / 2, 60, canvas.height, { isStatic: true });
     Composite.add(world, [ground, leftWall, rightWall]);
-    currentBlob = new Blob(100, 100, INITIAL_BLOB_SIZE, true);
+    currentBlob = new Blob(100, 100, INITIAL_BLOB_RADIUS, true);
     blobs.push(currentBlob);
     Composite.add(world, mouseConstraint);
 }
