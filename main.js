@@ -51,7 +51,7 @@ class Blob {
             const angle = Math.PI * 2 * (i / size);
             const px = x + Math.cos(angle) * radius;
             const py = y + Math.sin(angle) * radius;
-            const part = Bodies.circle(px, py, radius / 2);
+            const part = Bodies.circle(px, py, radius / 2, { inertia: Infinity, frictionAir: 0.1 });
             parts.push(part);
         }
 
@@ -59,7 +59,7 @@ class Blob {
         const constraints = parts.map(part => Constraint.create({
             bodyA: part,
             bodyB: parts[0],
-            stiffness: 0.1,
+            stiffness: 0.2,
             damping: 0.1
         }));
 
@@ -172,7 +172,9 @@ Events.on(mouseConstraint, 'mousemove', (event) => {
 
         // Prevent floating by only allowing horizontal movement
         const currentY = currentBlob.body.bodies[0].position.y;
-        Body.setPosition(currentBlob.body, { x: x, y: currentY });
+        currentBlob.parts.forEach(part => {
+            Body.setPosition(part, { x: x, y: currentY });
+        });
     }
 });
 
