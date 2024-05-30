@@ -33,6 +33,9 @@ const INITIAL_BLOB_SIZE = 100;
 const MINIMUM_ALIVE_SIZE = 10;
 const MINIMUM_SHOOT_SIZE = 20;
 const STREAM_INTERVAL = 100;
+const GRAVITY_SCALE = 1;
+
+engine.world.gravity.y = GRAVITY_SCALE;
 
 class Blob {
     constructor(x, y, size, isActive = false) {
@@ -59,7 +62,7 @@ class Blob {
         const constraints = parts.map(part => Constraint.create({
             bodyA: part,
             bodyB: parts[0],
-            stiffness: 0.2,
+            stiffness: 0.5,
             damping: 0.1
         }));
 
@@ -123,15 +126,8 @@ function checkBlobCollisions() {
     for (let i = blobs.length - 1; i >= 0; i--) {
         const blob = blobs[i];
         if (!blob.isActive && isColliding(currentBlob.body, blob.body)) {
-            currentBlob.size += blob.size;
-            Composite.remove(world, blob.body);
+            mergeBlobs(currentBlob, blob);
             blobs.splice(i, 1);
-            currentBlob.parts = currentBlob.parts.concat(blob.parts);
-            currentBlob.body = Composite.create({
-                bodies: currentBlob.parts,
-                constraints: currentBlob.body.constraints
-            });
-            Composite.add(world, currentBlob.body);
         }
     }
 }
@@ -141,6 +137,19 @@ function isColliding(bodyA, bodyB) {
     const dy = bodyA.bodies[0].position.y - bodyB.bodies[0].position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     return distance < bodyA.bodies[0].circleRadius + bodyB.bodies[0].circleRadius;
+}
+
+function mergeBlobs(mainBlob, otherBlob) {
+    otherBlob.parts.forEach(part => {
+        Composite.remove(world, part);
+        mainBlob.parts.push(part);
+        Composite.add(world, part);
+    });
+    mainBlob.body = Composite.create({
+        bodies: mainBlob.parts,
+        constraints: mainBlob.body.constraints
+    });
+    mainBlob.size += otherBlob.size;
 }
 
 const mouse = Mouse.create(canvas);
