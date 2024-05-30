@@ -33,7 +33,7 @@ const INITIAL_BLOB_RADIUS = 50;
 const MINIMUM_ALIVE_RADIUS = 10;
 const MINIMUM_SHOOT_RADIUS = 20;
 const STREAM_INTERVAL = 100;
-const GRAVITY_SCALE = 1;
+const GRAVITY_SCALE = 1.5;
 
 engine.world.gravity.y = GRAVITY_SCALE;
 
@@ -83,6 +83,7 @@ function gameLoop() {
     blobs.forEach(blob => blob.draw());
     drawHUD();
     Engine.update(engine);
+    applyGravity();
     checkBlobCollisions();
     requestAnimationFrame(gameLoop);
 }
@@ -91,6 +92,14 @@ function drawHUD() {
     ctx.font = '20px Arial';
     ctx.fillStyle = 'white';
     ctx.fillText(`HP: ${currentBlob.body.circleRadius.toFixed(2)}`, 20, 30);
+}
+
+function applyGravity() {
+    blobs.forEach(blob => {
+        if (blob.isActive) {
+            Body.applyForce(blob.body, blob.body.position, { x: 0, y: 0.05 * blob.body.mass });
+        }
+    });
 }
 
 function checkBlobCollisions() {
@@ -180,14 +189,16 @@ function shootStream(targetX, targetY) {
 
     const { x, y } = currentBlob.body.position;
     const angle = Math.atan2(targetY - y, targetX - x);
+    const distance = Math.sqrt(Math.pow(targetX - x, 2) + Math.pow(targetY - y, 2));
+    const velocity = Math.min(distance * 0.1, 20);
 
     const streamRadius = MINIMUM_SHOOT_RADIUS / 2;
     const streamX = x + Math.cos(angle) * currentBlob.body.circleRadius;
     const streamY = y + Math.sin(angle) * currentBlob.body.circleRadius;
     const streamBlob = new Blob(streamX, streamY, streamRadius);
     Body.setVelocity(streamBlob.body, {
-        x: Math.cos(angle) * 5,
-        y: Math.sin(angle) * 5
+        x: Math.cos(angle) * velocity,
+        y: Math.sin(angle) * velocity
     });
     blobs.push(streamBlob);
 
