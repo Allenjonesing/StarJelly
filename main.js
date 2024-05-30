@@ -1,4 +1,4 @@
-const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Body, Constraint, Vector } = Matter;
+const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Body, Constraint, World } = Matter;
 
 const canvas = document.getElementById('gameCanvas');
 const engine = Engine.create();
@@ -47,8 +47,8 @@ class Blob {
     createBlob(x, y, size) {
         const parts = [];
         const radius = size / 10;
-        for (let i = 0; i < size / 2; i++) {
-            const angle = Math.PI * 2 * (i / (size / 2));
+        for (let i = 0; i < size; i++) {
+            const angle = Math.PI * 2 * (i / size);
             const px = x + Math.cos(angle) * radius;
             const py = y + Math.sin(angle) * radius;
             const part = Bodies.circle(px, py, radius / 2);
@@ -59,7 +59,7 @@ class Blob {
         const constraints = parts.map(part => Constraint.create({
             bodyA: part,
             bodyB: parts[0],
-            stiffness: 0.2,
+            stiffness: 0.1,
             damping: 0.1
         }));
 
@@ -95,7 +95,9 @@ class Blob {
 
 function init() {
     const ground = Bodies.rectangle(canvas.width / 2, canvas.height - 30, canvas.width, 60, { isStatic: true });
-    Composite.add(world, ground);
+    const leftWall = Bodies.rectangle(0, canvas.height / 2, 60, canvas.height, { isStatic: true });
+    const rightWall = Bodies.rectangle(canvas.width, canvas.height / 2, 60, canvas.height, { isStatic: true });
+    Composite.add(world, [ground, leftWall, rightWall]);
 
     currentBlob = new Blob(100, 100, INITIAL_BLOB_SIZE, true);
     blobs.push(currentBlob);
@@ -169,9 +171,9 @@ Events.on(mouseConstraint, 'mousemove', (event) => {
         const x = mouse.position.x;
         const y = mouse.position.y;
 
-        if (y > currentBlob.body.bodies[0].position.y) {
-            Body.setPosition(currentBlob.body, { x: x, y: y });
-        }
+        // Prevent floating by only allowing horizontal movement
+        const currentY = currentBlob.body.bodies[0].position.y;
+        Body.setPosition(currentBlob.body, { x: x, y: currentY });
     }
 });
 
@@ -236,7 +238,9 @@ function resetGame() {
     Composite.clear(world, false, true);
     blobs = [];
     const ground = Bodies.rectangle(canvas.width / 2, canvas.height - 30, canvas.width, 60, { isStatic: true });
-    Composite.add(world, ground);
+    const leftWall = Bodies.rectangle(0, canvas.height / 2, 60, canvas.height, { isStatic: true });
+    const rightWall = Bodies.rectangle(canvas.width, canvas.height / 2, 60, canvas.height, { isStatic: true });
+    Composite.add(world, [ground, leftWall, rightWall]);
     currentBlob = new Blob(100, 100, INITIAL_BLOB_SIZE, true);
     blobs.push(currentBlob);
     Composite.add(world, mouseConstraint);
