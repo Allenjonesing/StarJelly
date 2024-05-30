@@ -30,7 +30,7 @@ let isDragging = false;
 let isShooting = false;
 
 const INITIAL_BLOB_SIZE = 50;
-const MINIMUM_SHOOT_SIZE = 20; // Twice the minimum size to be alive (10)
+const MINIMUM_SHOOT_SIZE = 10; // Minimum size to be alive
 const STREAM_INTERVAL = 100; // Interval in milliseconds for shooting stream
 
 class Blob {
@@ -76,8 +76,35 @@ function init() {
 function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     blobs.forEach(blob => blob.draw());
+    drawHUD();
     Engine.update(engine);
+    checkBlobCollisions();
     requestAnimationFrame(gameLoop);
+}
+
+function drawHUD() {
+    ctx.font = '20px Arial';
+    ctx.fillStyle = 'white';
+    ctx.fillText(`HP: ${currentBlob.size}`, 20, 30);
+}
+
+function checkBlobCollisions() {
+    for (let i = blobs.length - 1; i >= 0; i--) {
+        const blob = blobs[i];
+        if (!blob.isActive && isColliding(currentBlob.body, blob.body)) {
+            currentBlob.size += blob.size;
+            currentBlob.health += blob.size;
+            Composite.remove(world, blob.body);
+            blobs.splice(i, 1);
+        }
+    }
+}
+
+function isColliding(bodyA, bodyB) {
+    const dx = bodyA.position.x - bodyB.position.x;
+    const dy = bodyA.position.y - bodyB.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    return distance < bodyA.circleRadius + bodyB.circleRadius;
 }
 
 const mouse = Mouse.create(canvas);
@@ -135,7 +162,7 @@ function isInsideBlob(x, y, blob) {
 }
 
 function shootStream(targetX, targetY) {
-    if (currentBlob.size <= 2 * MINIMUM_SHOOT_SIZE) return;
+    if (currentBlob.size <= MINIMUM_SHOOT_SIZE) return;
 
     const { x, y } = currentBlob.body.position;
     const angle = Math.atan2(targetY - y, targetX - x);
@@ -154,7 +181,7 @@ function shootStream(targetX, targetY) {
     currentBlob.health -= streamSize;
     Matter.Body.scale(currentBlob.body, 1 - streamSize / currentBlob.size, 1 - streamSize / currentBlob.size);
 
-    if (currentBlob.size < 10) {
+    if (currentBlob.size < MINIMUM_SHOOT_SIZE) {
         alert('Game Over!');
         resetGame();
     }
