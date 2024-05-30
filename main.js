@@ -31,6 +31,7 @@ let isShooting = false;
 
 const INITIAL_BLOB_SIZE = 20;
 const MINIMUM_SHOOT_SIZE = 20; // Twice the minimum size to be alive (10)
+const STREAM_INTERVAL = 100; // Interval in milliseconds for shooting stream
 
 class Blob {
     constructor(x, y, size, isActive = false) {
@@ -97,6 +98,7 @@ Events.on(mouseConstraint, 'mousedown', (event) => {
         isDragging = true;
     } else if (currentBlob && currentBlob.size >= MINIMUM_SHOOT_SIZE) {
         isShooting = true;
+        startShooting(mouse.position.x, mouse.position.y);
     }
 });
 
@@ -115,12 +117,6 @@ Events.on(mouseConstraint, 'mousemove', (event) => {
 Events.on(mouseConstraint, 'mouseup', () => {
     isDragging = false;
     isShooting = false;
-});
-
-Events.on(mouseConstraint, 'tick', (event) => {
-    if (isShooting && currentBlob.size >= MINIMUM_SHOOT_SIZE) {
-        shootStream(mouse.position.x, mouse.position.y);
-    }
 });
 
 canvas.addEventListener('click', (e) => {
@@ -162,6 +158,16 @@ function shootStream(targetX, targetY) {
         alert('Game Over!');
         resetGame();
     }
+}
+
+function startShooting(targetX, targetY) {
+    const shoot = () => {
+        if (isShooting && currentBlob.size >= MINIMUM_SHOOT_SIZE) {
+            shootStream(targetX, targetY);
+            setTimeout(shoot, STREAM_INTERVAL);
+        }
+    };
+    shoot();
 }
 
 function resetGame() {
