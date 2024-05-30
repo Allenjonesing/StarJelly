@@ -1,4 +1,4 @@
-const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Vector } = Matter;
+const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events } = Matter;
 
 const canvas = document.getElementById('gameCanvas');
 const engine = Engine.create();
@@ -21,6 +21,8 @@ const render = Render.create({
 Render.run(render);
 const runner = Runner.create();
 Runner.run(runner, engine);
+
+const ctx = canvas.getContext('2d');
 
 let blobs = [];
 let currentBlob = null;
@@ -117,7 +119,7 @@ Events.on(mouseConstraint, 'mouseup', () => {
 
 Events.on(mouseConstraint, 'tick', (event) => {
     if (isShooting && currentBlob.size >= MINIMUM_SHOOT_SIZE) {
-        shootStream();
+        shootStream(mouse.position.x, mouse.position.y);
     }
 });
 
