@@ -1,4 +1,4 @@
-const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Body, Constraint, World } = Matter;
+const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Body, Constraint } = Matter;
 
 const canvas = document.getElementById('gameCanvas');
 const engine = Engine.create();
@@ -95,8 +95,8 @@ class Blob {
 
 function init() {
     const ground = Bodies.rectangle(canvas.width / 2, canvas.height - 30, canvas.width, 60, { isStatic: true });
-    const leftWall = Bodies.rectangle(0, canvas.height / 2, 60, canvas.height, { isStatic: true });
-    const rightWall = Bodies.rectangle(canvas.width, canvas.height / 2, 60, canvas.height, { isStatic: true });
+    const leftWall = Bodies.rectangle(30, canvas.height / 2, 60, canvas.height, { isStatic: true });
+    const rightWall = Bodies.rectangle(canvas.width - 30, canvas.height / 2, 60, canvas.height, { isStatic: true });
     Composite.add(world, [ground, leftWall, rightWall]);
 
     currentBlob = new Blob(100, 100, INITIAL_BLOB_SIZE, true);
@@ -169,7 +169,6 @@ Events.on(mouseConstraint, 'mousemove', (event) => {
     if (isDragging && currentBlob) {
         const { mouse } = event.source;
         const x = mouse.position.x;
-        const y = mouse.position.y;
 
         // Prevent floating by only allowing horizontal movement
         const currentY = currentBlob.body.bodies[0].position.y;
@@ -238,8 +237,8 @@ function resetGame() {
     Composite.clear(world, false, true);
     blobs = [];
     const ground = Bodies.rectangle(canvas.width / 2, canvas.height - 30, canvas.width, 60, { isStatic: true });
-    const leftWall = Bodies.rectangle(0, canvas.height / 2, 60, canvas.height, { isStatic: true });
-    const rightWall = Bodies.rectangle(canvas.width, canvas.height / 2, 60, canvas.height, { isStatic: true });
+    const leftWall = Bodies.rectangle(30, canvas.height / 2, 60, canvas.height, { isStatic: true });
+    const rightWall = Bodies.rectangle(canvas.width - 30, canvas.height / 2, 60, canvas.height, { isStatic: true });
     Composite.add(world, [ground, leftWall, rightWall]);
     currentBlob = new Blob(100, 100, INITIAL_BLOB_SIZE, true);
     blobs.push(currentBlob);
