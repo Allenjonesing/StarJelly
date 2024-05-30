@@ -1,4 +1,4 @@
-const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Body, Constraint } = Matter;
+const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Body, Constraint, Vector } = Matter;
 
 const canvas = document.getElementById('gameCanvas');
 const engine = Engine.create();
@@ -31,8 +31,8 @@ let isShooting = false;
 
 const INITIAL_BLOB_SIZE = 100;
 const MINIMUM_ALIVE_SIZE = 10;
-const MINIMUM_SHOOT_SIZE = 20; // Minimum size to shoot
-const STREAM_INTERVAL = 100; // Interval in milliseconds for shooting stream
+const MINIMUM_SHOOT_SIZE = 20;
+const STREAM_INTERVAL = 100;
 
 class Blob {
     constructor(x, y, size, isActive = false) {
@@ -46,7 +46,7 @@ class Blob {
 
     createBlob(x, y, size) {
         const parts = [];
-        const radius = size / 10; // Make each part smaller to form a blob
+        const radius = size / 10;
         for (let i = 0; i < size / 2; i++) {
             const angle = Math.PI * 2 * (i / (size / 2));
             const px = x + Math.cos(angle) * radius;
@@ -63,10 +63,9 @@ class Blob {
             damping: 0.1
         }));
 
-        return Body.create({
-            parts: [ ...parts ],
-            constraints: constraints,
-            inertia: Infinity
+        return Composite.create({
+            bodies: parts,
+            constraints: constraints
         });
     }
 
@@ -86,7 +85,7 @@ class Blob {
         });
 
         if (this.isActive) {
-            const pos = this.body.position;
+            const pos = this.body.bodies[0].position;
             ctx.font = '20px Arial';
             ctx.fillStyle = 'black';
             ctx.fillText(this.face, pos.x - 10, pos.y + 5);
@@ -136,10 +135,10 @@ function checkBlobCollisions() {
 }
 
 function isColliding(bodyA, bodyB) {
-    const dx = bodyA.position.x - bodyB.position.x;
-    const dy = bodyA.position.y - bodyB.position.y;
+    const dx = bodyA.bodies[0].position.x - bodyB.bodies[0].position.x;
+    const dy = bodyA.bodies[0].position.y - bodyB.bodies[0].position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < bodyA.circleRadius + bodyB.circleRadius;
+    return distance < bodyA.bodies[0].circleRadius + bodyB.bodies[0].circleRadius;
 }
 
 const mouse = Mouse.create(canvas);
@@ -170,8 +169,8 @@ Events.on(mouseConstraint, 'mousemove', (event) => {
         const x = mouse.position.x;
         const y = mouse.position.y;
 
-        if (y > currentBlob.body.position.y) {
-            Matter.Body.setPosition(currentBlob.body, { x: x, y: y });
+        if (y > currentBlob.body.bodies[0].position.y) {
+            Body.setPosition(currentBlob.body, { x: x, y: y });
         }
     }
 });
@@ -191,29 +190,29 @@ canvas.addEventListener('click', (e) => {
 });
 
 function isInsideBlob(x, y, blob) {
-    const dx = x - blob.body.position.x;
-    const dy = y - blob.body.position.y;
+    const dx = x - blob.body.bodies[0].position.x;
+    const dy = y - blob.body.bodies[0].position.y;
     return Math.sqrt(dx * dx + dy * dy) < blob.size;
 }
 
 function shootStream(targetX, targetY) {
     if (currentBlob.parts.length <= MINIMUM_ALIVE_SIZE) return;
 
-    const { x, y } = currentBlob.body.position;
+    const { x, y } = currentBlob.body.bodies[0].position;
     const angle = Math.atan2(targetY - y, targetX - x);
 
     const streamSize = 2;
     const streamX = x + Math.cos(angle) * currentBlob.size;
     const streamY = y + Math.sin(angle) * currentBlob.size;
     const streamBlob = new Blob(streamX, streamY, streamSize);
-    Matter.Body.setVelocity(streamBlob.body, {
+    Body.setVelocity(streamBlob.body, {
         x: Math.cos(angle) * 5,
         y: Math.sin(angle) * 5
     });
     blobs.push(streamBlob);
 
     currentBlob.size -= streamSize;
-    currentBlob.parts.splice(0, streamSize); // Remove parts from the main blob
+    currentBlob.parts.splice(0, streamSize);
     currentBlob.body = Composite.create({
         bodies: currentBlob.parts,
         constraints: currentBlob.body.constraints
