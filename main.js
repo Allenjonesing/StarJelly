@@ -1,4 +1,4 @@
-const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Vector } = Matter;
+const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events } = Matter;
 
 const canvas = document.getElementById('gameCanvas');
 const engine = Engine.create();
@@ -59,6 +59,9 @@ class Blob {
 }
 
 function init() {
+    const ground = Bodies.rectangle(canvas.width / 2, canvas.height - 50, canvas.width, 20, { isStatic: true });
+    Composite.add(world, ground);
+
     currentBlob = new Blob(100, 100, 20, true);
     blobs.push(currentBlob);
     gameLoop();
@@ -144,6 +147,8 @@ function shootStream(targetX, targetY) {
 function resetGame() {
     Composite.clear(world, false, true);
     blobs = [];
+    const ground = Bodies.rectangle(canvas.width / 2, canvas.height - 50, canvas.width, 20, { isStatic: true });
+    Composite.add(world, ground);
     currentBlob = new Blob(100, 100, 20, true);
     blobs.push(currentBlob);
     Composite.add(world, mouseConstraint);
