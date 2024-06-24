@@ -320,6 +320,7 @@ class BattleScene extends Phaser.Scene {
 
         // Set padding and element dimensions
         const padding = 50;
+        const topMargin = 100;
         const elementHeight = 30;
         const actionButtonHeight = 50;
         const halfWidth = this.scale.width / 2;
@@ -330,22 +331,22 @@ class BattleScene extends Phaser.Scene {
         this.addHelpText(`A battle has begun!`);
 
         // Player health and mana
-        this.playerHealthText = this.add.text(padding, padding + elementHeight, `Health: ${this.player.health}`, { fontSize: '16px', fill: '#fff' });
-        this.playerManaText = this.add.text(padding, padding + elementHeight * 2, `Mana: ${this.player.mana}`, { fontSize: '16px', fill: '#fff' });
+        this.playerHealthText = this.add.text(padding, topMargin + elementHeight, `Health: ${this.player.health}`, { fontSize: '16px', fill: '#fff' });
+        this.playerManaText = this.add.text(padding, topMargin + elementHeight * 2, `Mana: ${this.player.mana}`, { fontSize: '16px', fill: '#fff' });
 
         // Enemy health and mana
-        this.enemyHealthText = this.add.text(this.scale.width - padding - 200, padding + elementHeight, `Health: ${this.enemy.health}`, { fontSize: '16px', fill: '#fff' });
-        this.enemyManaText = this.add.text(this.scale.width - padding - 200, padding + elementHeight * 2, `Mana: ${this.enemy.mana}`, { fontSize: '16px', fill: '#fff' });
+        this.enemyHealthText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight, `Health: ${this.enemy.health}`, { fontSize: '16px', fill: '#fff' });
+        this.enemyManaText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight * 2, `Mana: ${this.enemy.mana}`, { fontSize: '16px', fill: '#fff' });
 
         // Add borders around health and mana areas
-        const playerHealthBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, padding + elementHeight - 10, 200, 75);
-        const enemyHealthBox = this.add.graphics().lineStyle(2, 0xff0000).strokeRect(this.scale.width - padding - 210, padding + elementHeight - 10, 200, 75);
+        const playerHealthBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, topMargin + elementHeight - 10, 200, 75);
+        const enemyHealthBox = this.add.graphics().lineStyle(2, 0xff0000).strokeRect(this.scale.width - padding - 210, topMargin + elementHeight - 10, 200, 75);
         this.uiContainer.add(playerHealthBox);
         this.uiContainer.add(enemyHealthBox);
 
         // Player and enemy sprites
-        this.player.sprite = this.add.sprite(padding + 100, padding + elementHeight * 10 + 50, 'npcBase64image'); // Adjust position as necessary
-        this.enemy.sprite = this.add.sprite(this.scale.width - padding - 100, padding + elementHeight * 10 + 50, 'enemyImageBase64'); // Adjust position as necessary
+        this.player.sprite = this.add.sprite(padding + 100, topMargin + elementHeight * 10 + 50, 'npcBase64image'); // Adjust position as necessary
+        this.enemy.sprite = this.add.sprite(this.scale.width - padding - 100, topMargin + elementHeight * 10 + 50, 'enemyImageBase64'); // Adjust position as necessary
 
         // Add hover animations
         this.add.tween({
