@@ -148,7 +148,7 @@ class BattleScene extends Phaser.Scene {
         const playerStats = await fetchPlayerStats();
         this.player = {
             name: 'Player',
-            description: '',
+            description: `${persona.name}, ${persona.description}`,
             health: playerStats.health,
             mana: playerStats.mana,
             atk: playerStats.atk,
@@ -169,7 +169,7 @@ class BattleScene extends Phaser.Scene {
         const enemyStats = await fetchEnemyStats();
         this.enemy = {
             name: 'Enemy',
-            description: '',
+            description: monsterDescription,
             health: enemyStats.health,
             mana: enemyStats.mana,
             atk: enemyStats.atk,
@@ -515,7 +515,7 @@ class BattleScene extends Phaser.Scene {
             orderText += `${this.turnOrder[(this.currentTurnIndex + i) % this.turnOrder.length].name}\n`;
         }
 
-        this.turnOrderList = this.add.text(this.scale.width / 2, this.scale.height / 2 + 30, orderText, { fontSize: '30px', fill: '#fff' }).setOrigin(0.5);
+        this.turnOrderList = this.add.text(this.scale.width / 2, this.scale.height / 2 + 200, orderText, { fontSize: '30px', fill: '#fff' }).setOrigin(0.5);
 
         this.turnOrderList.alpha = 0;
         this.tweens.add({
