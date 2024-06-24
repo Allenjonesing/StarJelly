@@ -1155,10 +1155,7 @@ class BattleScene extends Phaser.Scene {
             x: defender.x - 50,
             duration: 300,
             yoyo: true,
-            ease: 'Power1',
-            onComplete: () => {
-                attacker.x = attacker.originalX; // Reset attacker position
-            }
+            ease: 'Power1'
         });
     
         this.time.delayedCall(150, () => {
