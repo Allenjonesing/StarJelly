@@ -634,8 +634,6 @@ class BattleScene extends Phaser.Scene {
                 ease: 'Power1'
             });
         });
-
-        this.addHelpText('Choose a skill to inflict status effects.');
     }
 
     showElementSelection() {
@@ -678,8 +676,6 @@ class BattleScene extends Phaser.Scene {
                 ease: 'Power1'
             });
         });
-
-        this.addHelpText('Choose an element for your Magic Attack:');
     }
 
     hideSubOptions() {
