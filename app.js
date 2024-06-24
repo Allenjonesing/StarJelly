@@ -148,6 +148,7 @@ class BattleScene extends Phaser.Scene {
         const playerStats = await fetchPlayerStats();
         this.player = {
             name: 'Player',
+            description: '',
             health: playerStats.health,
             mana: playerStats.mana,
             atk: playerStats.atk,
@@ -168,6 +169,7 @@ class BattleScene extends Phaser.Scene {
         const enemyStats = await fetchEnemyStats();
         this.enemy = {
             name: 'Enemy',
+            description: '',
             health: enemyStats.health,
             mana: enemyStats.mana,
             atk: enemyStats.atk,
