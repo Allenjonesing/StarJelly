@@ -309,7 +309,6 @@ class BattleScene extends Phaser.Scene {
         const padding = 50;
         const elementHeight = 30;
         const actionButtonHeight = 50;
-        const actionButtonWidth = 120;
         const halfWidth = this.scale.width / 2;
 
         // Help text at the very top
@@ -367,6 +366,7 @@ class BattleScene extends Phaser.Scene {
         // Action buttons at the bottom
         this.actions = this.add.group();
         const actionNames = ['Attack', 'Defend', 'Magic Attack', 'Skills', 'Heal'];
+        const actionButtonWidth = (this.scale.width - padding * 2) / 5;
 
         actionNames.forEach((actionName, index) => {
             const x = halfWidth - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
@@ -488,6 +488,7 @@ class BattleScene extends Phaser.Scene {
             }
 
             let damage = 0;
+            let healing = 0;
             let critical = false;
             if (action === 'Attack') {
                 damage = this.calculateDamage(this.player.atk, this.enemy.def, this.player.luk, this.enemy.eva);
@@ -505,7 +506,7 @@ class BattleScene extends Phaser.Scene {
                     return;
                 }
             } else if (action === 'Defend') {
-                this.player.def *= 2; // Temporary defense boost
+                this.player.def *= 4; // Temporary defense boost
                 this.player.isDefending = true; // Temporary defense boost
                 this.helpText.setText('Player defends, boosting defense for this turn.');
             } else if (action === 'Skills') {
@@ -513,11 +514,11 @@ class BattleScene extends Phaser.Scene {
                 return;
             } else if (action === 'Heal') {
                 if (this.player.mana >= 15) {
-                    damage = -this.calculateHealing(this.player.magAtk);
+                    healing = this.calculateHealing(this.player.magAtk);
                     this.player.mana -= 15;
-                    this.player.health -= damage; // Assuming 100 is max health
-                    this.helpText.setText(`Player uses Heal! Restores ${damage} health.`);
-                    this.showDamageIndicator(this.player.sprite, damage, critical);
+                    this.player.health += healing;
+                    this.helpText.setText(`Player uses Heal! Restores ${healing} health.`);
+                    this.showDamageIndicator(this.player.sprite, -healing, critical);
                     this.applyHealingEffect(this.player.sprite);
                 } else {
                     this.helpText.setText("Not enough mana!");
@@ -766,7 +767,7 @@ class BattleScene extends Phaser.Scene {
                         this.enemy.triedElements.physical = true; // Mark physical attack as tried
                     }
                 } else if (actionType === 'Defend') {
-                    this.enemy.def *= 2; // Temporary defense boost
+                    this.enemy.def *= 4; // Temporary defense boost
                     this.enemy.isDefending = true; // Temporary defense boost
                     this.helpText.setText('Enemy defends, boosting defense for this turn.');
                 }
@@ -834,7 +835,7 @@ class BattleScene extends Phaser.Scene {
         let delaytime = 0;
 
         if (elementValue <= 0.0) {
-            delaytime = 500;
+            delaytime = 300;
             fontColor = elementValue < 0.0 ? '#0cc43d' : '#2bf1ff';
             const immunityText = elementValue < 0.0 ? 'BUFF' : 'IMMUNE';
             const displayText = this.add.text(target.x, target.y - 50, immunityText, { fontSize: '50px', fill: fontColor, fontStyle: 'bold' });
@@ -933,11 +934,11 @@ class BattleScene extends Phaser.Scene {
     nextTurn() {
         console.log('nextTurn...');
         if (this.turnOrder[this.currentTurnIndex].name === 'Player' && this.player.isDefending) {
-            this.player.def /= 2; // Reset defense boost after turn
+            this.player.def /= 4; // Reset defense boost after turn
             this.player.isDefending = false;
         }
         if (this.turnOrder[this.currentTurnIndex].name === 'Enemy' && this.enemy.isDefending) {
-            this.enemy.def /= 2; // Reset defense boost after turn
+            this.enemy.def /= 4; // Reset defense boost after turn
             this.enemy.isDefending = false;
         }
 
@@ -997,30 +998,38 @@ class BattleScene extends Phaser.Scene {
         const currentCharacter = this.turnOrder[this.currentTurnIndex].name === 'Player' ? this.player : this.enemy;
 
         for (let i = currentCharacter.statusEffects.length - 1; i >= 0; i--) {
-            let effect = currentCharacter.statusEffects[i];
+            this.time.delayedCall(500 * i, () => {
+                let effect = currentCharacter.statusEffects[i];
+                let damage = 0;
 
-            switch (effect.type) {
-                case 'Poison':
-                    currentCharacter.health -= 10; // Example poison damage
-                    this.helpText.setText(`${currentCharacter.name} takes poison damage!`);
-                    break;
-                case 'Burn':
-                    currentCharacter.health -= 15; // Example burn damage
-                    this.helpText.setText(`${currentCharacter.name} takes burn damage!`);
-                    break;
-                // Stun and Freeze are handled in isCharacterFrozenOrStunned method
-            }
+                switch (effect.type) {
+                    case 'Poison':
+                        damage = currentCharacter.health * 0.05;
+                        currentCharacter.health -= damage; // Example poison damage
+                        this.helpText.setText(`${currentCharacter.name} takes poison damage!`);
+                        this.showDamageIndicator(currentCharacter.sprite, damage);
 
-            if (effect.turns > 0) {
-                effect.turns--;
-                if (effect.turns === 0) {
-                    currentCharacter.statusEffects.splice(i, 1);
+                        break;
+                    case 'Burn':
+                        damage = currentCharacter.health * 0.05;
+                        currentCharacter.health -= 15; // Example burn damage
+                        this.helpText.setText(`${currentCharacter.name} takes burn damage!`);
+                        this.showDamageIndicator(currentCharacter.sprite, damage);
+                        break;
+                    // Stun and Freeze are handled in isCharacterFrozenOrStunned method
                 }
-            }
 
-            if (currentCharacter.health <= 0) {
-                this.endBattle(currentCharacter.name === 'Player' ? 'lose' : 'win');
-            }
+                if (effect.turns > 0) {
+                    effect.turns--;
+                    if (effect.turns === 0) {
+                        currentCharacter.statusEffects.splice(i, 1);
+                    }
+                }
+
+                if (currentCharacter.health <= 0) {
+                    this.endBattle(currentCharacter.name === 'Player' ? 'lose' : 'win');
+                }
+            }, [], this);
         }
 
         this.updateStatusIndicators(currentCharacter);
@@ -1086,23 +1095,6 @@ class BattleScene extends Phaser.Scene {
             magicBall.destroy();
             this.applyEffect(defender, color);
             this.showDamageIndicator(defender, damage, critical, elementValue);
-        });
-    }
-
-    createExplosion(x, y, color) {
-        let particles = this.add.particles('particle');
-        let emitter = particles.createEmitter({
-            x: x,
-            y: y,
-            speed: { min: -800, max: 800 },
-            angle: { min: 0, max: 360 },
-            scale: { start: 0.5, end: 0 },
-            blendMode: 'ADD',
-            lifespan: 500,
-            tint: color
-        });
-        this.time.delayedCall(500, () => {
-            particles.destroy();
         });
     }
 }
