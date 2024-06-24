@@ -1,6 +1,6 @@
 const costSavingMode = true;
-const genericeEnemyBase64 = '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';
-const genericePlayerBase64 = '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';
+const genericEnemyBase64 = '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';
+const genericPlayerBase64 = 'wsGd7PhGABIYxjWj1gYhlEcJ1EYX7lyea67dGt7O4rChYWFnf309D3nHr5r9ZlnYg/qLYn44cAXAGFz0p/sbjWPn/FEwFAzXslL2PpgETzo/bfCEJuBOrUSdWOkgA8Kvz0sm4sSN6A1T9RKtIHQOcoyQSXTzDuvphk7hv7EDwsZV9Bu4/UN99rr1jHllQxGsL0jl29yYanX1MiYFtIfQlXgdKrSjKwTJA6wijrX4lahiRBJa2NMECgfGuPFHPQPulQMt8oXc9gWGRBaTftEr+b41CaOp7i8IFVWFgCu2XCskzhSYaQ0+qr82G98bPPmXl7o/oG10/3MSzacQj6QrM/ZAMrB0VPzNy7333htD7ycOLuqAx0YQwBhQIHCQNkf/pkfO3vbfLvTZJgCpACDgytvFnvTLEfrxLNwTR5FEm+tz07edS/4/I2v/2E30Hu3dhaOHXvzma989K//6F/8H/72r/zSr59/+Zm/9jf/yihNd0c5O1hYXHvu208a49/z7seuXr4+nU68tVVZlEVe5nmZF2WR1csD6wCFAAkVaaPqlBMUAM81LN5ZW+V5Ps2LrKgKy84jYhSFjUaYJFEzSRqNJI6iIDDGaKU1kQKpzREgwiCVclM7vFke7Il11TTTHpthm1ArrFETtWvicK1cL/uwlvBwbbYjreqPHaNwzS6y7C9cqvZ2xHIAtYWDhAWZwYtzwowVQ+658lLb2wQQHRapTfORSToCMXkPDKTIGBMnURCHQRAZZaIgYucHw3630x5Ppo7BBDGHzQnAmTNHDSrmmaScAXh2VmFQZlvb16XIAeqFvGP24K3iuWThZ7jUOpCiKhd62B+WSlFaldspSahHBZZeqNsye/3SVlKU7JkB2ZZSVYiIRY67A6tjrJxc24JGN9zZlps3eDCR0sHqgu421aTi7QPISuinsrsvhWVQ4jzvbVW+UmQGUXNktAJhQggCo6hgn4fGlNNh2+4uDLNPvulfKdTFyj875Y2JVA6c4jHBxQlxoJY6VbJs2DTiMIjjMIrCr3/xW9cv9VdWV46fOLN5+Uo5GU+m9o1X96AUsB5AoMzuure7suxtmWfZ+OTppeXV+cAYrZUhpZXpLcSn739kZ3eYTrcARgADV+xkuztVkaclVBU5pzwjKa0JwZfzC52Tt9376pd+9cSx7rETx06fXhxsXT95x72/9ssf29m4+ZN/9ad//t/84mh48HN/7+9cuPRGNk7DoLO8fPRrX/n8uTtPra+tvP7aeRb23rKrvCutLZ2tAMR5bz3X1q561SxSexMEAD0LkiqrsswLayt2DoSN1s1Wo9dtdDuNTrPZaMRJHIZhEASBMdpoTUTOOWutCKOIAo9SSNovdq778cRlRTEZh6gNgKrRXwCHwYR1g3Doup9pjgQJtFJYdwgzL6mIJteMQw96thKEOjFahD2KF/AM1ksl3itUcVRaR4KCyrFzWa7DeOrEoXLe1uMpE+gw0EorASClBMB7l6VpM0mmk9QL9ofw2W9sHVs5tdCZ954Pv+HZc0CAudgbuzfz/g4JA3vxXjyTd2BtOP+RsHM/AjgPrEQMg0FPZJLYIBmCVgtpOLVxS5YXAqPBeZmU3rMUGXjGvPDjgT+6ogCwaUwY+sphu03rKxQEHBkYDuDiZbd/4HxJUNA0hZs3edyX3ZuWrefSkh8nyU4UIqEIW01iAIWzyHBZjPzw2p3Uv/V8PtxSG33aG+GwQFF4YpEXemICHDClGh69uyGd2CA2klA0kdZxo3Hjxs2XX7syyLOh1QXFL746ZqsIET2Lt3FL/dRfeeedK5Ge7GpdPvTuB9tzzSSJtVZRGEI1tcX+Pd/7kY0Lz7LdFTcqx8NsPKm8LSylDjJHhfWAFqlstuWeh989uvmM7l8+cd874uVuVWXKBNdv7ly6VPz8v/zFI8eOPfqOx/6//+hfzC90f/Zv/OxLr77STJpJs90J4ye++Jnv/9DjRkebtzZrx7JnFs/OsvXeM1bMDsQJSD1DEphFy4KwgBesyspZy94jiAl00ojjOAqM0Uoz82zXJzXpqArjbHm1Md4FFO/ZO6wsSyg4G+wIiNRM75oQ7Kxl58UzMzhhdxjtDCwg7EWCdjuKVVHY8XhSe4nqq+TQDEowc+rMeBokALPXXrwIgqTODcdjLiYUhfXAjWqfNwowApEAAledhcc0e1QKPct8K9LsREumvAPfVCZ0nhSAgBfvrCqyCjRHkYrDEBlBfBBQEGpj0GgRLjonHmsvP3T9/Lee+8oXt/v2hedvLvXMPbefKbJxQ01vX/d3nY6PrfqGHgJbcSKiVRgqREL0zjOCDgJAksNrBrBWHgoQoEdEVCDiKyGdpWY8LZGUCXTF3jv2vizzKYpnEWMoJj2v1EJXv7DvBDBUSpgBoM4kAwCHIloJkrDVBM4BC7KIqufh5JCkLgFmA3IRASalTBisra0N9w4m08krr7w4nU7YekQ5un7s+IkTymismXOzNCf+7uJ1htHyDuoPU40oOjwvtRWYsZb4iTAbTa1WmCTzq+td74/khWxtbT/7R30clgxAiqbOrycqUbTr/WdvHByN9LFGoIfT/qgYE6j2pORisrkbLLRIkbPWZtliMwZRz2/vA6kEFAk3SVvFucCLly6fTMujR8+stZu2Kka+HbRWn/3qJ1pn7w/WewxTPkxpwENs0eH/HVji0cpK+9L5EL1zXAGYgD0DohAREbGAcx5nMCZlnXXuUFYE4J3zh5pYZnFAwcJ8Eul0Mp5MpkT0nR/ioRefD+8a/K7vRISh9nMBeJGt6UGWH7TaPUGGOolUGOTwcag/ZUrpMGIBKlLYxUprNh618pFBUZB0oqiSFoIDZUALQOG9VOBcYVC0AhCNQADk2WkFK3e+b9y//qnf/k9l5TdvbD54x+mOGnT5+tselBNLqtd2isbgBTwoUmESaW2QSCkE4iAwDIBI2hjPAiQeBJlJkYhHL0AEQOIBga2rGk3fTkCcF1uKLdhmirndCBUAOq/Er2q/HkNX6Xwz10SRUiWLBkSWgMGCeEalY2EgZ0P0zotH0YJeQAEoBE9aaLZ0IgFhVkiKUCvqLcwfOXXy/OuvZ1tTA2QIF5Z6d9x1W7PdnI0qBFikVsGz+Dow8rvPAyIDIgJrqA24IPVJpxpsrYjQWlv/GbNjL56FA01rqwuNRlINRxUJEgOwAreuo5HP38iLX3hj+0Ori6eiZkuXk8K/eemaOXHk9nZDnE8rFwPNJc1Amy9e2nt+mM7rINZSOWkhlQoZdOXchY3NWwfDY2tH1pdXi2jujRe/LZkLLRHHfTWpQ9IAZ4LO2VVckwBYirlO2emWwx0DUIKEnkSYkBQJEXoPXlCEwDEaZEAv6Fi89wLivPe+thyQ98pj2FlcbBrcm0zSMgOi2g0BgCCqrlfrlRgAYL1am22TqdZCAYgo3Mkno+F+snRS1bs6nK2dgUWYEQgRGUCHMRap+EJZA3GsWlorCygw9r6cFkuklVaWuaO9F691mFu2JEloBBwI+8piBQR28dRt2Dry8f/w/xvc2mTyj57Ua53JyhL0uqTVCHzJ1gODIRWYgFATadIa6sW5gxqW6MmxgDLB4QcD6uUPKUBkxFl8jLBuhOl9Z+WFF/pVLuirxGCQJEYTCBRpYfOiFanlduQqO3VIKLFBX4mZweEARAhJKYNAwg5RnMNDwwcAHKKw3krEExAWrTWCry+21aPHdvuj3as3jNGtZuvM7WeXTx6doeegfg9m96b3HlBmPQYSAsxmUN/1VdMnGJEIPaJHQEVFVc1mJzNHitSSfGN0vc1lz4RYsjseBxtl6QGvFvZXrm0+0mq8r9tYCFQzoGtXb01L0bHutUNROPX+W9uDF0cZAnrwRinnOCEdeE9IEVEKblIVL1154+rePrWGWbnbW7wLnG1S0ndySBD9M7av+pv3oGyky5UlPdghImXorSKeZtN9mYUmHDK0hdk7Vx8D77x3jmsqhwjpaG5uMVKQ53ll7WEzgrNnAOA7z+h/60sASEABTLwdTsZrjplme/i6/YOZXlsUkVL0/wcOLCDKVP/BtAAAAABJRU5ErkJggg==';
 const version = 'Development v0.1'
 
 let health = 100;
@@ -45,11 +45,11 @@ class ExplorationScene extends Phaser.Scene {
 
         // Fetch news data and generate AI responses
         await fetchNews();
-        loadingText.setText(loadingText.text + `\n\nBased on the article: ${newsData[0].title}`);
+        loadingText.setText(`${loadingText.text}\n\nBased on the article: ${newsData[0].title}`);
 
         await generateAIResponses();
-        loadingText.setText(loadingText.text + `\n\nYou'll play as: ${persona.name}, ${persona.description}`);
-        loadingText.setText(loadingText.text + `\n\nYou'll be fighting: ${monsterDescription}`);
+        loadingText.setText(`${loadingText.text}\n\nYou'll play as: ${persona.name}, ${persona.description}`);
+        loadingText.setText(`${loadingText.text}\n\nYou'll be fighting: ${monsterDescription}`);
 
         const newsArticle = newsData[0]; // Use the first article for the enemy
         enemyImageBase64 = await generateEnemyImage(newsArticle, setting);
@@ -266,7 +266,7 @@ class BattleScene extends Phaser.Scene {
     }
 
     update() {
-        if (battleEnded == false) {
+        if (!battleEnded) {
             if (this.player.health <= 0) {
                 this.endBattle('lose');
             } else if (this.enemy.health <= 0) {
@@ -352,7 +352,6 @@ class BattleScene extends Phaser.Scene {
             repeat: -1,
             ease: 'Sine.easeInOut'
         });
-
 
         this.uiContainer.add(this.player.sprite);
         this.uiContainer.add(this.enemy.sprite);
@@ -465,16 +464,16 @@ class BattleScene extends Phaser.Scene {
     }
 
     applyEffect(target, color) {
-        let healingLight = this.add.graphics();
-        healingLight.fillStyle(color, 0.5); // Green color with some transparency
-        healingLight.fillCircle(target.x, target.y, 50);
+        let effectLight = this.add.graphics();
+        effectLight.fillStyle(color, 0.5);
+        effectLight.fillCircle(target.x, target.y, 50);
         this.tweens.add({
-            targets: healingLight,
+            targets: effectLight,
             alpha: { from: 1, to: 0 },
             duration: 1000,
             ease: 'Power1',
             onComplete: () => {
-                healingLight.destroy();
+                effectLight.destroy();
             }
         });
     }
@@ -483,14 +482,15 @@ class BattleScene extends Phaser.Scene {
         this.hideSubOptions(); // Ensure sub-options are hidden when a main action is chosen
 
         if (!this.isCooldown && this.turnOrder[this.currentTurnIndex].name === 'Player') {
+            let damage = 0;
+            let healing = 0;
+            let critical = false;
+
             if (action === 'Magic Attack' && !elementType) {
                 this.showElementSelection();
                 return;
             }
 
-            let damage = 0;
-            let healing = 0;
-            let critical = false;
             if (action === 'Attack') {
                 damage = this.calculateDamage(this.player.atk, this.enemy.def, this.player.luk, this.enemy.eva);
                 this.showDamageIndicator(this.enemy.sprite, damage, critical);
@@ -508,7 +508,7 @@ class BattleScene extends Phaser.Scene {
                 }
             } else if (action === 'Defend') {
                 this.player.def *= 4; // Temporary defense boost
-                this.player.isDefending = true; // Temporary defense boost
+                this.player.isDefending = true;
                 this.helpText.setText('Player defends, boosting defense for this turn.');
             } else if (action === 'Skills') {
                 this.showSkillSelection();
@@ -526,6 +526,7 @@ class BattleScene extends Phaser.Scene {
                     return;
                 }
             }
+
             this.enemy.health -= damage;
             this.playerHealthText.setText(`Health: ${this.player.health}`);
             this.enemyHealthText.setText(`Health: ${this.enemy.health}`);
@@ -568,7 +569,7 @@ class BattleScene extends Phaser.Scene {
                 this.skillButtons.clear(true, true);
                 this.startCooldown();
                 this.hidePlayerActions();
-                skillBox.destroy();
+                this.skillBox.destroy();
             });
             this.skillButtons.add(skillText);
 
@@ -612,7 +613,7 @@ class BattleScene extends Phaser.Scene {
             elementText.on('pointerdown', () => {
                 this.handlePlayerAction('Magic Attack', element);
                 this.elementButtons.clear(true, true);
-                elementBox.destroy();
+                this.elementBox.destroy();
             });
             this.elementButtons.add(elementText);
 
@@ -646,148 +647,148 @@ class BattleScene extends Phaser.Scene {
 
     enemyAction() {
         console.log('enemyAction...');
-        if ((this.turnOrder[this.currentTurnIndex].name === 'Enemy')) {
-            const performEnemyAction = () => {
-                console.log('performEnemyAction...');
-                console.log('performEnemyAction... this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
-                console.log('performEnemyAction... this.isCooldown: ', this.isCooldown);
-                if (!this.isCooldown) {
-                    let damage = 0;
-                    let critical = false;
-                    let actionType;
-                    let action;
-                    let highestDamage = 0;
-                    let bestElement = 'physical';
+if ((this.turnOrder[this.currentTurnIndex].name === 'Enemy')) {
+        const performEnemyAction = () => {
+            console.log('performEnemyAction...');
+            console.log('performEnemyAction... this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
+            console.log('performEnemyAction... this.isCooldown: ', this.isCooldown);
+            if (!this.isCooldown) {
+                let damage = 0;
+                let critical = false;
+                let actionType;
+                let action;
+                let highestDamage = 0;
+                let bestElement = 'physical';
 
-                    // Periodically reset tried attacks and skills
-                    if (this.enemy.triedElements.resetCounter === undefined || this.enemy.triedElements.resetCounter >= 20) {
-                        this.enemy.triedElements = {
-                            fire: this.enemy.learnedElementalWeaknesses.fire < 0 ? this.enemy.triedElements.fire : false,
-                            ice: this.enemy.learnedElementalWeaknesses.ice < 0 ? this.enemy.triedElements.fire : false,
-                            water: this.enemy.learnedElementalWeaknesses.water < 0 ? this.enemy.triedElements.fire : false,
-                            lightning: this.enemy.learnedElementalWeaknesses.lightning < 0 ? this.enemy.triedElements.fire : false,
-                            physical: this.enemy.learnedElementalWeaknesses.physical < 0 ? this.enemy.triedElements.fire : false,
-                            skills: this.enemy.triedElements.skills || [],
-                            resetCounter: 0
-                        };
+                // Periodically reset tried attacks and skills
+                if (this.enemy.triedElements.resetCounter === undefined || this.enemy.triedElements.resetCounter >= 20) {
+                    this.enemy.triedElements = {
+                        fire: this.enemy.learnedElementalWeaknesses.fire < 0 ? this.enemy.triedElements.fire : false,
+                        ice: this.enemy.learnedElementalWeaknesses.ice < 0 ? this.enemy.triedElements.fire : false,
+                        water: this.enemy.learnedElementalWeaknesses.water < 0 ? this.enemy.triedElements.fire : false,
+                        lightning: this.enemy.learnedElementalWeaknesses.lightning < 0 ? this.enemy.triedElements.fire : false,
+                        physical: this.enemy.learnedElementalWeaknesses.physical < 0 ? this.enemy.triedElements.fire : false,
+                        skills: this.enemy.triedElements.skills || [],
+                        resetCounter: 0
+                    };
+                } else {
+                    this.enemy.triedElements.resetCounter++;
+                }
+
+                // Determine if there's an element, physical attack, or skill that hasn't been tried yet
+                const elements = Object.keys(this.enemy.triedElements).filter(e => e !== 'resetCounter' && e !== 'skills');
+                let untriedElement = elements.find(element => !this.enemy.triedElements[element]);
+
+                const skills = this.enemy.actions.skills || [];
+                let untriedSkill = skills.find(skill => !this.enemy.triedElements.skills.includes(skill));
+
+                if (!untriedElement && untriedSkill) {
+                    actionType = 'skills';
+                    action = untriedSkill;
+                } else if (!untriedElement && !untriedSkill) {
+                    // Determine the best attack based on the highest damage dealt so far
+                    for (const [element, dmg] of Object.entries(this.enemy.learnedElementalWeaknesses)) {
+                        console.log(`Checking damage for element ${element}: ${dmg}`);
+                        if (dmg > highestDamage) {
+                            highestDamage = dmg;
+                            bestElement = element;
+                        }
+                    }
+                    if (bestElement === 'physical') {
+                        actionType = 'physical';
+                        action = 'Attack';
                     } else {
-                        this.enemy.triedElements.resetCounter++;
+                        actionType = 'magic';
+                        action = `${bestElement.charAt(0).toUpperCase() + bestElement.slice(1)} Magic Attack`;
                     }
-
-                    // Determine if there's an element, physical attack, or skill that hasn't been tried yet
-                    const elements = Object.keys(this.enemy.triedElements).filter(e => e !== 'resetCounter' && e !== 'skills');
-                    let untriedElement = elements.find(element => !this.enemy.triedElements[element]);
-
-                    const skills = this.enemy.actions.skills || [];
-                    let untriedSkill = skills.find(skill => !this.enemy.triedElements.skills.includes(skill));
-
-                    if (!untriedElement && untriedSkill) {
-                        actionType = 'skills';
-                        action = untriedSkill;
-                    } else if (!untriedElement && !untriedSkill) {
-                        // Determine the best attack based on the highest damage dealt so far
-                        for (const [element, dmg] of Object.entries(this.enemy.learnedElementalWeaknesses)) {
-                            console.log(`Checking damage for element ${element}: ${dmg}`);
-                            if (dmg > highestDamage) {
-                                highestDamage = dmg;
-                                bestElement = element;
-                            }
-                        }
-                        if (bestElement === 'physical') {
-                            actionType = 'physical';
-                            action = 'Attack';
-                        } else {
-                            actionType = 'magic';
-                            action = `${bestElement.charAt(0).toUpperCase() + bestElement.slice(1)} Magic Attack`;
-                        }
-                    } else if (untriedElement) {
-                        if (untriedElement === 'physical') {
-                            actionType = 'physical';
-                            action = 'Attack';
-                        } else {
-                            actionType = 'magic';
-                            action = `${untriedElement.charAt(0).toUpperCase() + untriedElement.slice(1)} Magic Attack`;
-                        }
+                } else if (untriedElement) {
+                    if (untriedElement === 'physical') {
+                        actionType = 'physical';
+                        action = 'Attack';
+                    } else {
+                        actionType = 'magic';
+                        action = `${untriedElement.charAt(0).toUpperCase() + untriedElement.slice(1)} Magic Attack`;
                     }
+                }
 
-                    console.log('performEnemyAction... actionType: ', actionType);
-                    console.log('performEnemyAction... action: ', action);
-                    if (actionType === 'physical') {
+                console.log('performEnemyAction... actionType: ', actionType);
+                console.log('performEnemyAction... action: ', action);
+                if (actionType === 'physical') {
+                    damage = this.calculateDamage(this.enemy.atk, this.player.def, this.enemy.luk, this.player.eva);
+                    this.showDamageIndicator(this.player.sprite, damage, critical);
+                    this.helpText.setText(`Enemy attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
+                    this.playAttackAnimation(this.enemy.sprite, this.player.sprite);
+                    this.enemy.learnedElementalWeaknesses.physical = Math.max(this.enemy.learnedElementalWeaknesses.physical, damage);
+                    this.enemy.triedElements.physical = true; // Mark physical attack as tried
+                } else if (actionType === 'magic') {
+                    const elementType = action.split(' ')[0].toLowerCase();
+
+                    if (this.enemy.mana >= 10) {
+                        damage = this.calculateMagicDamage(this.enemy.magAtk, this.player.magDef, this.player.element[elementType], this.enemy.luk);
+                        this.enemy.mana -= 10;
+                        this.helpText.setText(`Enemy uses ${elementType.charAt(0).toUpperCase() + elementType.slice(1)} Magic Attack! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
+                        this.playMagicAttackAnimation(this.enemy.sprite, this.player.sprite, elementType, damage, critical, this.player.element[elementType]);
+
+                        // Learn about player's elemental weaknesses
+                        this.enemy.learnedElementalWeaknesses[elementType] = Math.max(this.enemy.learnedElementalWeaknesses[elementType], damage);
+                        this.enemy.triedElements[elementType] = true; // Mark this element as tried
+                    } else {
+                        // Fallback to physical attack if not enough mana
                         damage = this.calculateDamage(this.enemy.atk, this.player.def, this.enemy.luk, this.player.eva);
                         this.showDamageIndicator(this.player.sprite, damage, critical);
                         this.helpText.setText(`Enemy attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
                         this.playAttackAnimation(this.enemy.sprite, this.player.sprite);
                         this.enemy.learnedElementalWeaknesses.physical = Math.max(this.enemy.learnedElementalWeaknesses.physical, damage);
                         this.enemy.triedElements.physical = true; // Mark physical attack as tried
-                    } else if (actionType === 'magic') {
-                        const elementType = action.split(' ')[0].toLowerCase();
-
-                        if (this.enemy.mana >= 10) {
-                            damage = this.calculateMagicDamage(this.enemy.magAtk, this.player.magDef, this.player.element[elementType], this.enemy.luk);
-                            this.enemy.mana -= 10;
-                            this.helpText.setText(`Enemy uses ${elementType.charAt(0).toUpperCase() + elementType.slice(1)} Magic Attack! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
-                            this.playMagicAttackAnimation(this.enemy.sprite, this.player.sprite, elementType, damage, critical, this.player.element[elementType]);
-
-                            // Learn about player's elemental weaknesses
-                            this.enemy.learnedElementalWeaknesses[elementType] = Math.max(this.enemy.learnedElementalWeaknesses[elementType], damage);
-                            this.enemy.triedElements[elementType] = true; // Mark this element as tried
-                        } else {
-                            // Fallback to physical attack if not enough mana
-                            damage = this.calculateDamage(this.enemy.atk, this.player.def, this.enemy.luk, this.player.eva);
-                            this.showDamageIndicator(this.player.sprite, damage, critical);
-                            this.helpText.setText(`Enemy attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
-                            this.playAttackAnimation(this.enemy.sprite, this.player.sprite);
-                            this.enemy.learnedElementalWeaknesses.physical = Math.max(this.enemy.learnedElementalWeaknesses.physical, damage);
-                            this.enemy.triedElements.physical = true; // Mark physical attack as tried
-                        }
-                    } else if (actionType === 'skills') {
-                        this.playAttackAnimation(this.enemy.sprite, this.player.sprite);
-                        if (skills.includes(action)) {
-                            this.helpText.setText(`Enemy uses ${action}!`);
-                            this.applyStatusEffect('Enemy', 'Player', action);
-                            this.enemy.triedElements.skills.push(action); // Mark skill as tried
-                        } else {
-                            damage = this.calculateDamage(this.enemy.atk, this.player.def, this.enemy.luk, this.player.eva);
-                            this.showDamageIndicator(this.player.sprite, damage, critical);
-                            this.helpText.setText(`Enemy attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
-                            this.enemy.learnedElementalWeaknesses.physical = Math.max(this.enemy.learnedElementalWeaknesses.physical, damage);
-                        }
-                    } else if (actionType === 'Heal') {
-                        if (this.enemy.mana >= 15) {
-                            damage = -this.calculateHealing(this.enemy.magAtk);
-                            this.enemy.mana -= 15;
-                            this.enemy.health -= damage; // Assuming 100 is max health
-                            this.helpText.setText(`Enemy uses Heal! Restores ${-damage} health.`);
-                            this.showDamageIndicator(this.enemy.sprite, damage, critical);
-                            this.applyHealingEffect(this.enemy.sprite);
-                        } else {
-                            // Fallback to physical attack if not enough mana
-                            damage = this.calculateDamage(this.enemy.atk, this.player.def, this.enemy.luk, this.player.eva);
-                            this.showDamageIndicator(this.player.sprite, damage, critical);
-                            this.helpText.setText(`Enemy attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
-                            this.playAttackAnimation(this.enemy.sprite, this.player.sprite);
-                            this.enemy.learnedElementalWeaknesses.physical = Math.max(this.enemy.learnedElementalWeaknesses.physical, damage);
-                            this.enemy.triedElements.physical = true; // Mark physical attack as tried
-                        }
-                    } else if (actionType === 'Defend') {
-                        this.enemy.def *= 4; // Temporary defense boost
-                        this.enemy.isDefending = true; // Temporary defense boost
-                        this.helpText.setText('Enemy defends, boosting defense for this turn.');
                     }
-                    console.log('performEnemyAction... damage: ', damage);
-
-                    this.player.health -= damage;
-                    this.playerHealthText.setText(`Health: ${this.player.health}`);
-                    this.enemyHealthText.setText(`Health: ${this.enemy.health}`);
-                    this.enemyManaText.setText(`Mana: ${this.enemy.mana}`);
-                    this.startCooldown();
-                } else {
-                    console.log('Delaying Call to performEnemyAction...');
-                    this.time.delayedCall(200, performEnemyAction, [], this);
+                } else if (actionType === 'skills') {
+                    this.playAttackAnimation(this.enemy.sprite, this.player.sprite);
+                    if (skills.includes(action)) {
+                        this.helpText.setText(`Enemy uses ${action}!`);
+                        this.applyStatusEffect('Enemy', 'Player', action);
+                        this.enemy.triedElements.skills.push(action); // Mark skill as tried
+                    } else {
+                        damage = this.calculateDamage(this.enemy.atk, this.player.def, this.enemy.luk, this.player.eva);
+                        this.showDamageIndicator(this.player.sprite, damage, critical);
+                        this.helpText.setText(`Enemy attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
+                        this.enemy.learnedElementalWeaknesses.physical = Math.max(this.enemy.learnedElementalWeaknesses.physical, damage);
+                    }
+                } else if (actionType === 'Heal') {
+                    if (this.enemy.mana >= 15) {
+                        damage = -this.calculateHealing(this.enemy.magAtk);
+                        this.enemy.mana -= 15;
+                        this.enemy.health -= damage; // Assuming 100 is max health
+                        this.helpText.setText(`Enemy uses Heal! Restores ${-damage} health.`);
+                        this.showDamageIndicator(this.enemy.sprite, damage, critical);
+                        this.applyHealingEffect(this.enemy.sprite);
+                    } else {
+                        // Fallback to physical attack if not enough mana
+                        damage = this.calculateDamage(this.enemy.atk, this.player.def, this.enemy.luk, this.player.eva);
+                        this.showDamageIndicator(this.player.sprite, damage, critical);
+                        this.helpText.setText(`Enemy attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
+                        this.playAttackAnimation(this.enemy.sprite, this.player.sprite);
+                        this.enemy.learnedElementalWeaknesses.physical = Math.max(this.enemy.learnedElementalWeaknesses.physical, damage);
+                        this.enemy.triedElements.physical = true; // Mark physical attack as tried
+                    }
+                } else if (actionType === 'Defend') {
+                    this.enemy.def *= 4; // Temporary defense boost
+                    this.enemy.isDefending = true; // Temporary defense boost
+                    this.helpText.setText('Enemy defends, boosting defense for this turn.');
                 }
-            };
-            performEnemyAction();
-        } else {
+                console.log('performEnemyAction... damage: ', damage);
+
+                this.player.health -= damage;
+                this.playerHealthText.setText(`Health: ${this.player.health}`);
+                this.enemyHealthText.setText(`Health: ${this.enemy.health}`);
+                this.enemyManaText.setText(`Mana: ${this.enemy.mana}`);
+                this.startCooldown();
+            } else {
+                console.log('Delaying Call to performEnemyAction...');
+                this.time.delayedCall(200, performEnemyAction, [], this);
+            }
+        };
+        performEnemyAction();
+} else {
             console.error('It is not currently the enemy\'s turn');
          }
     }
@@ -963,7 +964,7 @@ class BattleScene extends Phaser.Scene {
         } else if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
             this.hidePlayerActions();
             this.enemyAction();
-        } else {
+} else {
             console.error('this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
         }
         this.updateTurnOrderDisplay();
@@ -1177,7 +1178,7 @@ async function generateEnemyImage(newsArticle, setting) {
     } else {
         // Cost Saving Mode
         console.warn('Cost Saving Mode Enabled, No image generation.');
-        return `data:image/png;base64,${genericeEnemyBase64}`;
+        return `data:image/png;base64,${genericEnemyBase64}`;
     }
 }
 
@@ -1319,23 +1320,23 @@ async function generateAIResponses() {
                                     throw new Error('No image generated');
                                 }
                             } catch (error) {
-                                loacation.reload();
+loacation.reload();
                                 console.error('Error generating AI response:', error);
                             }
                         } else {
                             // Cost Saving Mode
                             console.warn('Cost Saving Mode Enabled, No image generation.');
-                            npcBase64image = `data:image/png;base64,${genericePlayerBase64}`;
+                            npcBase64image = `data:image/png;base64,${genericPlayerBase64}`;
                             responses.push({ response: monsterDescription, persona: persona, imageBase64: npcBase64image });
                         }
                     }
                 } catch (error) {
-                    loacation.reload();
+loacation.reload();
                     console.error('Error generating AI response:', error);
                 }
             }
         } catch (error) {
-            loacation.reload();
+loacation.reload();
             console.error('Error generating AI response:', error);
         }
     }
@@ -1366,7 +1367,7 @@ async function generatePersonas(setting) {
             parsedPersonas = JSON.parse(aiResponse.choices[0].message.content);
         }
     } catch (error) {
-        loacation.reload();
+loacation.reload();
         console.error('Error generating AI response:', error);
     }
 
