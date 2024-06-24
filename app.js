@@ -1155,9 +1155,12 @@ class BattleScene extends Phaser.Scene {
             x: defender.x - 50,
             duration: 300,
             yoyo: true,
-            ease: 'Power1'
+            ease: 'Power1',
+            onComplete: () => {
+                attacker.x = attacker.originalX; // Reset attacker position
+            }
         });
-
+    
         this.time.delayedCall(150, () => {
             this.tweens.add({
                 targets: defender,
@@ -1165,11 +1168,14 @@ class BattleScene extends Phaser.Scene {
                 duration: 50,
                 yoyo: true,
                 repeat: 5,
-                ease: 'Sine.easeInOut'
+                ease: 'Sine.easeInOut',
+                onComplete: () => {
+                    defender.angle = 0; // Reset defender angle
+                }
             });
         }, [], this);
     }
-
+    
     playMagicAttackAnimation(attacker, defender, elementType, damage, critical, elementValue) {
         let color;
         let statusEffect = null;
