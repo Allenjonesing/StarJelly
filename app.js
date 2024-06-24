@@ -349,40 +349,40 @@ class BattleScene extends Phaser.Scene {
         if (this.uiContainer) {
             this.uiContainer.destroy(true);
         }
-
+    
         // Create a container for all UI elements
         this.uiContainer = this.add.container(0, 0);
-
+    
         // Set padding and element dimensions
         const padding = 50;
-        const topMargin = 100;
+const topMargin = 100;
         const elementHeight = 30;
         const actionButtonHeight = 50;
         const halfWidth = this.scale.width / 2;
-
+    
         // Help text at the very top
         this.helpText = this.add.text(padding, padding, '', { fontSize: '14px', fill: '#fff' });
         this.uiContainer.add(this.helpText);
-        this.addHelpText(`A battle has begun!`);
-
+this.addHelpText(`A battle has begun!`);
+    
         // Player health and mana
         this.playerHealthText = this.add.text(padding, topMargin + elementHeight, `Health: ${this.player.health}`, { fontSize: '16px', fill: '#fff' });
         this.playerManaText = this.add.text(padding, topMargin + elementHeight * 2, `Mana: ${this.player.mana}`, { fontSize: '16px', fill: '#fff' });
-
+    
         // Enemy health and mana
         this.enemyHealthText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight, `Health: ${this.enemy.health}`, { fontSize: '16px', fill: '#fff' });
         this.enemyManaText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight * 2, `Mana: ${this.enemy.mana}`, { fontSize: '16px', fill: '#fff' });
-
+    
         // Add borders around health and mana areas
         const playerHealthBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, topMargin + elementHeight - 10, 200, 75);
         const enemyHealthBox = this.add.graphics().lineStyle(2, 0xff0000).strokeRect(this.scale.width - padding - 210, topMargin + elementHeight - 10, 200, 75);
         this.uiContainer.add(playerHealthBox);
         this.uiContainer.add(enemyHealthBox);
-
+    
         // Player and enemy sprites
         this.player.sprite = this.add.sprite(padding + 100, topMargin + elementHeight * 10 + 50, 'npcBase64image'); // Adjust position as necessary
         this.enemy.sprite = this.add.sprite(this.scale.width - padding - 100, topMargin + elementHeight * 10 + 50, 'enemyImageBase64'); // Adjust position as necessary
-
+    
         // Add hover animations
         this.add.tween({
             targets: this.player.sprite,
@@ -392,7 +392,7 @@ class BattleScene extends Phaser.Scene {
             repeat: -1,
             ease: 'Sine.easeInOut'
         });
-
+    
         this.add.tween({
             targets: this.enemy.sprite,
             y: this.enemy.sprite.y - 10,
@@ -401,22 +401,38 @@ class BattleScene extends Phaser.Scene {
             repeat: -1,
             ease: 'Sine.easeInOut'
         });
-
+    
         this.uiContainer.add(this.player.sprite);
         this.uiContainer.add(this.enemy.sprite);
-
+    
+        // Player and enemy names and descriptions
+        const playerDescriptionText = `${this.player.name}: ${this.player.description}`;
+        const enemyDescriptionText = `${this.enemy.name}: ${this.enemy.description}`;
+    
+        const playerDescription = this.add.text(padding, this.player.sprite.y + 50, playerDescriptionText, { fontSize: '14px', fill: '#fff', wordWrap: { width: 200 } });
+        const enemyDescription = this.add.text(this.scale.width - padding - 200, this.enemy.sprite.y + 50, enemyDescriptionText, { fontSize: '14px', fill: '#fff', wordWrap: { width: 200 } });
+    
+        // Add borders around descriptions
+        const playerDescriptionBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, this.player.sprite.y + 40, 200, playerDescription.height + 20);
+        const enemyDescriptionBox = this.add.graphics().lineStyle(2, 0xff0000).strokeRect(this.scale.width - padding - 210, this.enemy.sprite.y + 40, 200, enemyDescription.height + 20);
+        this.uiContainer.add(playerDescriptionBox);
+        this.uiContainer.add(enemyDescriptionBox);
+    
+        this.uiContainer.add(playerDescription);
+        this.uiContainer.add(enemyDescription);
+    
         // Turn order list
-        this.turnOrderText = this.add.text(this.scale.width - 150, this.scale.height / 2, 'Turn List', { fontSize: '36px', fill: '#fff' }).setOrigin(0.5);
+        this.turnOrderText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Turns:', { fontSize: '36px', fill: '#fff' }).setOrigin(0.5);
         this.updateTurnOrderDisplay();
-
+    
         // Add elements to the UI container
         this.uiContainer.add([this.playerHealthText, this.playerManaText, this.enemyHealthText, this.enemyManaText, this.turnOrderText]);
-
+    
         // Action buttons at the bottom
         this.actions = this.add.group();
         const actionNames = ['Attack', 'Defend', 'Magic Attack', 'Skills', 'Heal'];
         const actionButtonWidth = (this.scale.width - padding * 2) / 5;
-
+    
         actionNames.forEach((actionName, index) => {
             const x = ((2 * padding) + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
             const actionText = this.add.text(x, this.scale.height - actionButtonHeight - padding, actionName, {
@@ -430,7 +446,7 @@ class BattleScene extends Phaser.Scene {
             this.actions.add(actionText);
             this.uiContainer.add(actionText);
         });
-
+    
         // Add animation and colorful effect to action buttons
         this.actions.children.iterate(actionText => {
             this.tweens.add({
@@ -443,12 +459,12 @@ class BattleScene extends Phaser.Scene {
                 ease: 'Power1'
             });
         });
-
+    
         // Add action box around action buttons
         this.actionBox = this.add.graphics().lineStyle(2, 0xffff00).strokeRect(padding, this.scale.height - actionButtonHeight - padding * 2, this.scale.width - padding * 2, actionButtonHeight + padding);
         this.uiContainer.add(this.actionBox);
     }
-
+    
     chooseElement() {
         const elements = ['fire', 'ice', 'water', 'lightning'];
         return elements[Math.floor(Math.random() * elements.length)];
