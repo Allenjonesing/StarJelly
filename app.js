@@ -847,22 +847,32 @@ class BattleScene extends Phaser.Scene {
             let targetCharacter = target === 'Player' ? this.player : this.enemy;
             let casterCharacter = caster === 'Player' ? this.player : this.enemy;
 
+            console.log('applyStatusEffect... targetCharacter.immunities: ', targetCharacter.immunities);
             if (targetCharacter.immunities && targetCharacter.immunities.includes(statusEffect)) {
+                console.log('applyStatusEffect... IMMUNE');
                 this.addHelpText(`${targetCharacter.name} is immune to ${statusEffect}!`);
                 if (caster === 'Enemy') {
                     this.enemy.learnedStatusImmunities[statusEffect] = true;
                 }
             } else {
+                console.log('applyStatusEffect... Not Immune');
                 let existingEffect = targetCharacter.statusEffects.find(effect => effect.type === statusEffect);
+                console.log('applyStatusEffect... existingEffect: ', existingEffect);
                 if (existingEffect) {
+                    console.log('applyStatusEffect... statusEffect: ', statusEffect);
+                    console.log('applyStatusEffect... existingEffect.turns: ', existingEffect.turns);
                     if (statusEffect === 'Stun') existingEffect.turns = 1;
                     else if (statusEffect === 'Freeze') existingEffect.turns = 5;
                     else existingEffect.turns = -1;
                     this.addHelpText(`${targetCharacter.name} is already affected by ${statusEffect}. Duration refreshed.`);
+                    console.log('applyStatusEffect... existingEffect.turns: ', existingEffect.turns);
                 } else {
+                    console.log('applyStatusEffect... statusEffect: ', statusEffect);
+                    console.log('applyStatusEffect... existingEffect.turns: ', existingEffect.turns);
                     let turns = (statusEffect === 'Stun' ? 1 : (statusEffect === 'Freeze' ? 5 : -1)); // -1 means it doesn't expire automatically
                     targetCharacter.statusEffects.push({ type: statusEffect, turns });
                     this.addHelpText(`${targetCharacter.name} is now affected by ${statusEffect}!`);
+                    console.log('applyStatusEffect... existingEffect.turns: ', existingEffect.turns);
                 }
             }
 
