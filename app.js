@@ -960,9 +960,11 @@ class BattleScene extends Phaser.Scene {
 
         if (this.turnOrder[this.currentTurnIndex].name === 'Player') {
             this.showPlayerActions();
-        } else {
+        } else if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
             this.hidePlayerActions();
             this.enemyAction();
+        } else {
+            console.error('this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
         }
         this.updateTurnOrderDisplay();
     }
