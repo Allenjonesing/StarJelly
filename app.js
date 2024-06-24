@@ -256,7 +256,7 @@ class BattleScene extends Phaser.Scene {
             this.helpText.setText('');
         }
     }
-    
+
     resize(gameSize, baseSize, displaySize, resolution) {
         let width = gameSize.width;
         let height = gameSize.height;
@@ -843,11 +843,15 @@ class BattleScene extends Phaser.Scene {
     }
 
     applyStatusEffect(caster, target, statusEffect) {
-        this.time.delayedCall(150, () => {
+        console.log('applyStatusEffect... caster: ', caster);
+        console.log('applyStatusEffect... target: ', target);
+        console.log('applyStatusEffect... statusEffect: ', statusEffect);
+
+        this.time.delayedCall(150, () => {  // Delay of 1 second for a more natural response
             let targetCharacter = target === 'Player' ? this.player : this.enemy;
             let casterCharacter = caster === 'Player' ? this.player : this.enemy;
 
-            if (targetCharacter.immunities.includes(statusEffect)) {
+            if (targetCharacter.immunities && targetCharacter.immunities.includes(statusEffect)) {
                 this.addHelpText(`${targetCharacter.name} is immune to ${statusEffect}!`);
                 if (caster === 'Enemy') {
                     this.enemy.learnedStatusImmunities[statusEffect] = true;
@@ -1140,8 +1144,8 @@ class BattleScene extends Phaser.Scene {
             this.applyEffect(defender, color);
             this.showDamageIndicator(defender, damage, critical, elementValue);
 
-            // Inflict status effect if applicable
-            if (statusEffect && !defender.immunities.includes(statusEffect)) {
+            // Inflict status effect if applicable and defender has immunities property
+            if (statusEffect && defender.immunities && !defender.immunities.includes(statusEffect)) {
                 this.applyStatusEffect(attacker.name, defender.name, statusEffect);
             }
         });
