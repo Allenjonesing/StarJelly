@@ -374,7 +374,11 @@ class BattleScene extends Phaser.Scene {
         const halfWidth = this.scale.width / 2;
 
         // Help text at the very top
-        this.helpText = this.add.text(padding, padding, '', { fontSize: '14px', fill: '#fff' });
+        this.helpText = this.add.text(padding, padding, '', {
+            fontSize: '14px',
+            fill: '#fff',
+            wordWrap: { width: this.scale.width - 2 * padding }
+        });
         this.uiContainer.add(this.helpText);
         this.addHelpText(`A battle has begun based on the article: ${newsData[0].title}`);
 
@@ -1084,24 +1088,27 @@ class BattleScene extends Phaser.Scene {
                 let effect = currentCharacter.statusEffects[i];
                 let damage = 0;
 
-                switch (effect.type) {
-                    case 'Poison':
-                        damage = Math.floor(currentCharacter.health * 0.05);
-                        currentCharacter.health -= damage;
-                        this.addHelpText(`${currentCharacter.name} takes poison damage!`);
-                        this.showDamageIndicator(currentCharacter.sprite, damage);
-                        break;
-                    case 'Burn':
-                        damage = Math.floor(currentCharacter.health * 0.05);
-                        currentCharacter.health -= damage;
-                        this.addHelpText(`${currentCharacter.name} takes burn damage!`);
-                        this.showDamageIndicator(currentCharacter.sprite, damage);
-                        break;
-                    // Stun and Freeze are handled in isCharacterFrozenOrStunned method
-                }
+                if (effect && effect.type) {
 
-                if (currentCharacter.health <= 0) {
-                    this.endBattle(currentCharacter.name === 'Player' ? 'lose' : 'win');
+                    switch (effect.type) {
+                        case 'Poison':
+                            damage = Math.floor(currentCharacter.health * 0.05);
+                            currentCharacter.health -= damage;
+                            this.addHelpText(`${currentCharacter.name} takes poison damage!`);
+                            this.showDamageIndicator(currentCharacter.sprite, damage);
+                            break;
+                        case 'Burn':
+                            damage = Math.floor(currentCharacter.health * 0.05);
+                            currentCharacter.health -= damage;
+                            this.addHelpText(`${currentCharacter.name} takes burn damage!`);
+                            this.showDamageIndicator(currentCharacter.sprite, damage);
+                            break;
+                        // Stun and Freeze are handled in isCharacterFrozenOrStunned method
+                    }
+
+                    if (currentCharacter.health <= 0) {
+                        this.endBattle(currentCharacter.name === 'Player' ? 'lose' : 'win');
+                    }
                 }
             }, [], this);
         }
