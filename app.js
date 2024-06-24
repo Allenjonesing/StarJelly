@@ -36,21 +36,21 @@ class ExplorationScene extends Phaser.Scene {
             wordWrap: { width: window.innerWidth - 40 }
         }).setOrigin(0.5).setAlign('center');
 
-        
+
         // Fetch news data and generate AI responses
         await fetchNews();
         loadingText.setText(`${loadingText.text}\n\nBased on the article: ${newsData[0].title}`);
-        
+
         await generateAIResponses();
         loadingText.setText(`${loadingText.text}\n\nYou'll play as: ${persona.name}, ${persona.description}`);
         loadingText.setText(`${loadingText.text}\n\nYou'll be fighting: ${monsterDescription}`);
-        
+
         const newsArticle = newsData[0]; // Use the first article for the enemy
         enemyImageBase64 = await generateEnemyImage(newsArticle, setting);
-        
+
         // Prep Base64 images
         this.prepBase64Images();
-        
+
         // Create player
         this.player = this.physics.add.sprite(400, 300, 'player');
         this.player.setCollideWorldBounds(true);
@@ -953,6 +953,13 @@ class BattleScene extends Phaser.Scene {
         this.currentTurnIndex = (this.currentTurnIndex + 1) % this.turnOrder.length;
         const currentCharacter = this.turnOrder[this.currentTurnIndex].name === 'Player' ? this.player : this.enemy;
 
+        // Decrement status effect turns only here
+        for (let effect of currentCharacter.statusEffects) {
+            if (effect.turns > 0) {
+                effect.turns--;
+            }
+        }
+
         if (this.isCharacterFrozenOrStunned(currentCharacter)) {
             this.startCooldown();
         }
@@ -972,43 +979,31 @@ class BattleScene extends Phaser.Scene {
 
     isCharacterFrozenOrStunned(character) {
         console.log('isCharacterFrozenOrStunned... character: ', character);
-    
+
         const frozenStatus = character.statusEffects.find(effect => effect.type === 'Freeze');
         const stunnedStatus = character.statusEffects.find(effect => effect.type === 'Stun');
-    
+
         if (frozenStatus) {
-            frozenStatus.turns--;
-            if (frozenStatus.turns <= 0) {
-                character.statusEffects = character.statusEffects.filter(effect => effect.type !== 'Freeze');
-                this.updateStatusIndicators(character);
-                return false;
-            }
             this.helpText.setText(`${character.name} is frozen and skips a turn!`);
             return true;
         }
-    
+
         if (stunnedStatus) {
-            stunnedStatus.turns--;
-            if (stunnedStatus.turns <= 0) {
-                character.statusEffects = character.statusEffects.filter(effect => effect.type !== 'Stun');
-                this.updateStatusIndicators(character);
-                return false;
-            }
             this.helpText.setText(`${character.name} is stunned and skips a turn!`);
             return true;
         }
-    
+
         return false;
     }
-    
+
     handleStatusEffects() {
         const currentCharacter = this.turnOrder[this.currentTurnIndex].name === 'Player' ? this.player : this.enemy;
-    
+
         for (let i = currentCharacter.statusEffects.length - 1; i >= 0; i--) {
             this.time.delayedCall(500 * i, () => {
                 let effect = currentCharacter.statusEffects[i];
                 let damage = 0;
-    
+
                 switch (effect.type) {
                     case 'Poison':
                         damage = currentCharacter.health * 0.05;
@@ -1024,23 +1019,24 @@ class BattleScene extends Phaser.Scene {
                         break;
                     // Stun and Freeze are handled in isCharacterFrozenOrStunned method
                 }
-    
+
+                // Decrement the turn counter
                 if (effect.turns > 0) {
                     effect.turns--;
                     if (effect.turns === 0) {
                         currentCharacter.statusEffects.splice(i, 1);
                     }
                 }
-    
+
                 if (currentCharacter.health <= 0) {
                     this.endBattle(currentCharacter.name === 'Player' ? 'lose' : 'win');
                 }
             }, [], this);
         }
-    
+
         this.updateStatusIndicators(currentCharacter);
     }
-    
+
     showPlayerActions() {
         this.actions.children.each(action => action.setVisible(true));
         this.actionBox.setVisible(true);
