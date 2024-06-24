@@ -1167,16 +1167,11 @@ async function generateEnemyImage(newsArticle, setting) {
 
 function spawnEnemies(scene) {
     if (newsData.length > 0) {
-        for (let i = 0; i < 3; i++) {
-            let x = Phaser.Math.Between(400, 300);
-            let y = Phaser.Math.Between(50, window.innerHeight - 50);
-            let enemy = scene.enemies.create(x, y, 'enemy');
-            enemy.setCollideWorldBounds(true);
-        }
+        let enemy = scene.enemies.create(400, 300, 'enemy');
+        enemy.setCollideWorldBounds(true);
         scene.physics.add.collider(scene.player, scene.enemies, scene.startBattle, null, scene);
         scene.physics.add.collider(scene.enemies, scene.enemies);
     } else {
-        location.reload();
         console.error('No news data available to generate enemies');
     }
 }
