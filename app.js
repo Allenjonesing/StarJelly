@@ -884,6 +884,7 @@ class BattleScene extends Phaser.Scene {
             if (targetCharacter.immunities && targetCharacter.immunities.includes(statusEffect)) {
                 console.log('applyStatusEffect... IMMUNE');
                 this.addHelpText(`${targetCharacter.name} is immune to ${statusEffect}!`);
+                this.showPhraseIndicator(target, 'IMMUNE', '#2bf1ff');
                 if (caster === 'Enemy') {
                     this.enemy.learnedStatusImmunities[statusEffect] = true;
                 }
@@ -977,6 +978,24 @@ class BattleScene extends Phaser.Scene {
         }, [], this);
     }
 
+    showPhraseIndicator(target, phrase, color) {
+        let delaytime = 0;
+
+        this.time.delayedCall(delaytime, () => {
+            const damageText = this.add.text(target.x, target.y - 50, phrase, { fontSize: '60px', fill: color, fontStyle: 'bold' });
+            this.tweens.add({
+                targets: damageText,
+                y: target.y - 250,
+                alpha: { from: 1, to: 0 },
+                duration: 2500,
+                ease: 'Power1',
+                onComplete: () => {
+                    damageText.destroy();
+                }
+            });
+        }, [], this);
+    }
+
     calculateDamage(atk, def, luk, eva) {
         let criticalChance = luk / 100;
         let critical = Math.random() < criticalChance;
@@ -1057,7 +1076,7 @@ class BattleScene extends Phaser.Scene {
                 effect.turns--;
             }
         }
-        
+
         this.handleStatusEffects();
     }
 
