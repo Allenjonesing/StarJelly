@@ -121,6 +121,7 @@ class BattleScene extends Phaser.Scene {
     constructor() {
         super({ key: 'BattleScene' });
         this.helpMessages = [];
+        this.loadingIndicator = null;
     }
 
     async create(data) {
@@ -128,6 +129,9 @@ class BattleScene extends Phaser.Scene {
 
         this.player = data.player;
         this.enemy = data.enemy;
+
+        // Show loading indicator
+        this.showLoadingIndicator();
 
         // Initialize player and enemy data
         const playerStats = await fetchPlayerStats();
@@ -185,6 +189,9 @@ class BattleScene extends Phaser.Scene {
             immunities: enemyStats.immunities || []
         };
 
+        // Hide loading indicator
+        this.hideLoadingIndicator();
+
         // Generate enemy image based on news article and setting
         if (newsData.length > 0) {
             if (enemyImageBase64) {
@@ -207,6 +214,30 @@ class BattleScene extends Phaser.Scene {
             } else {
                 console.error('Failed to generate enemy image');
             }
+        }
+    }
+
+    showLoadingIndicator() {
+        this.loadingIndicator = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Loading...', {
+            fontSize: '32px',
+            fill: '#fff',
+            backgroundColor: '#000',
+            padding: { left: 10, right: 10, top: 10, bottom: 10 }
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: this.loadingIndicator,
+            alpha: { from: 1, to: 0.3 },
+            duration: 500,
+            yoyo: true,
+            repeat: -1
+        });
+    }
+
+    hideLoadingIndicator() {
+        if (this.loadingIndicator) {
+            this.loadingIndicator.destroy();
+            this.loadingIndicator = null;
         }
     }
 
@@ -811,7 +842,7 @@ class BattleScene extends Phaser.Scene {
         this.time.delayedCall(150, () => {
             let targetCharacter = target === 'Player' ? this.player : this.enemy;
             let casterCharacter = caster === 'Player' ? this.player : this.enemy;
-    
+
             if (targetCharacter.immunities.includes(statusEffect)) {
                 this.addHelpText(`${targetCharacter.name} is immune to ${statusEffect}!`);
                 if (caster === 'Enemy') {
@@ -830,11 +861,11 @@ class BattleScene extends Phaser.Scene {
                     this.addHelpText(`${targetCharacter.name} is now affected by ${statusEffect}!`);
                 }
             }
-    
+
             this.updateStatusIndicators(targetCharacter);
         }, [], this);
     }
-    
+
     updateStatusIndicators(character) {
         if (character.statusIndicators) {
             character.statusIndicators.clear(true, true);
