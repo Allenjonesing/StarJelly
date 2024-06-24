@@ -620,7 +620,7 @@ class BattleScene extends Phaser.Scene {
 
     calculateHealing(magAtk) {
         let variance = Phaser.Math.FloatBetween(0.9, 1.1);
-        let baseHealing = Math.floor(2 * magAtk * variance);
+        let baseHealing = Math.floor((4 * magAtk + 200) * variance);
         return Math.max(1, baseHealing); // Ensure minimum healing is 1
     }
 
@@ -1053,7 +1053,7 @@ class BattleScene extends Phaser.Scene {
             }
             this.updateTurnOrderDisplay();
         }
-        
+
         // Decrement status effect turns only here
         for (let effect of currentCharacter.statusEffects) {
             if (effect.turns > 0) {
