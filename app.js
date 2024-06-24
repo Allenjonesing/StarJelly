@@ -198,7 +198,6 @@ class BattleScene extends Phaser.Scene {
                 this.createUI();
 
                 // Check whose turn it is and start the action immediately if it's the enemy's turn
-                console.log('create... this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
                 if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
                     this.enemyAction();
                 } else {
@@ -634,8 +633,6 @@ class BattleScene extends Phaser.Scene {
     }
 
     hideSubOptions() {
-        console.log('hideSubOptions... this.skillButtons: ', this.skillButtons);
-        console.log('hideSubOptions... this.elementButtons: ', this.elementButtons);
         if (this.skillButtons) {
             this.skillBox.clear();
             this.skillButtons.clear(true, true);
@@ -648,10 +645,10 @@ class BattleScene extends Phaser.Scene {
 
     enemyAction() {
         console.log('enemyAction...');
+        console.log('performEnemyAction... this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
         if ((this.turnOrder[this.currentTurnIndex].name === 'Enemy')) {
             const performEnemyAction = () => {
                 console.log('performEnemyAction...');
-                console.log('performEnemyAction... this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
                 console.log('performEnemyAction... this.isCooldown: ', this.isCooldown);
                 if (!this.isCooldown) {
                     let damage = 0;
@@ -663,6 +660,7 @@ class BattleScene extends Phaser.Scene {
 
                     // Periodically reset tried attacks and skills
                     if (this.enemy.triedElements.resetCounter === undefined || this.enemy.triedElements.resetCounter >= 20) {
+                        console.log('performEnemyAction... Resetting learned damages...');
                         this.enemy.triedElements = {
                             fire: this.enemy.learnedElementalWeaknesses.fire < 0 ? this.enemy.triedElements.fire : false,
                             ice: this.enemy.learnedElementalWeaknesses.ice < 0 ? this.enemy.triedElements.fire : false,
@@ -689,7 +687,7 @@ class BattleScene extends Phaser.Scene {
                     } else if (!untriedElement && !untriedSkill) {
                         // Determine the best attack based on the highest damage dealt so far
                         for (const [element, dmg] of Object.entries(this.enemy.learnedElementalWeaknesses)) {
-                            console.log(`Checking damage for element ${element}: ${dmg}`);
+                            console.log(`performEnemyAction... Checking damage for element ${element}: ${dmg}`);
                             if (dmg > highestDamage) {
                                 highestDamage = dmg;
                                 bestElement = element;
@@ -961,7 +959,9 @@ class BattleScene extends Phaser.Scene {
             }
         }
     
-        this.handleStatusEffects();
+        this.time.delayedCall(750, () => {  // Delay of 1 second for a more natural response
+            this.handleStatusEffects();
+        }, [], this);
     
         if (this.isCharacterFrozenOrStunned(currentCharacter)) {
             this.startCooldown();
