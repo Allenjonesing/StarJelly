@@ -959,9 +959,7 @@ class BattleScene extends Phaser.Scene {
             }
         }
     
-        this.time.delayedCall(750, () => {  // Delay of 1 second for a more natural response
-            this.handleStatusEffects();
-        }, [], this);
+        this.handleStatusEffects();
     
         if (this.isCharacterFrozenOrStunned(currentCharacter)) {
             this.startCooldown();
