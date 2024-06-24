@@ -872,7 +872,7 @@ class BattleScene extends Phaser.Scene {
         console.log('applyStatusEffect... target: ', target);
         console.log('applyStatusEffect... statusEffect: ', statusEffect);
 
-        this.time.delayedCall(150, () => {  // Delay of 1 second for a more natural response
+        this.time.delayedCall(150, () => {
             let targetCharacter = target === 'Player' ? this.player : this.enemy;
             let casterCharacter = caster === 'Player' ? this.player : this.enemy;
 
@@ -888,16 +888,13 @@ class BattleScene extends Phaser.Scene {
                 let existingEffect = targetCharacter.statusEffects.find(effect => effect.type === statusEffect);
                 console.log('applyStatusEffect... existingEffect: ', existingEffect);
                 if (existingEffect) {
-                    console.log('applyStatusEffect... statusEffect: ', statusEffect);
-                    console.log('applyStatusEffect... existingEffect.turns: ', existingEffect.turns);
-                    if (statusEffect === 'Stun') existingEffect.turns = 1;
-                    else if (statusEffect === 'Freeze') existingEffect.turns = 5;
-                    else existingEffect.turns = -1;
-                    this.addHelpText(`${targetCharacter.name} is already affected by ${statusEffect}. Duration refreshed.`);
-                    console.log('applyStatusEffect... existingEffect.turns: ', existingEffect.turns);
+                    if (existingEffect.turns !== -1) { // Only refresh if it is not infinite
+                        if (statusEffect === 'Stun') existingEffect.turns = 1;
+                        else if (statusEffect === 'Freeze') existingEffect.turns = 5;
+                        this.addHelpText(`${targetCharacter.name} is already affected by ${statusEffect}. Duration refreshed.`);
+                    }
                 } else {
-                    console.log('applyStatusEffect... statusEffect: ', statusEffect);
-                    let turns = (statusEffect === 'Stun' ? 1 : (statusEffect === 'Freeze' ? 5 : -1)); // -1 means it doesn't expire automatically
+                    let turns = (statusEffect === 'Stun' ? 1 : (statusEffect === 'Freeze' ? 5 : 3)); // 3 turns for non-infinite status effects
                     targetCharacter.statusEffects.push({ type: statusEffect, turns });
                     this.addHelpText(`${targetCharacter.name} is now affected by ${statusEffect}!`);
                 }
@@ -1108,6 +1105,9 @@ class BattleScene extends Phaser.Scene {
                 }
             }, [], this);
         }
+
+        // Filter out status effects with 0 turns left
+        currentCharacter.statusEffects = currentCharacter.statusEffects.filter(effect => effect.turns !== 0);
 
         this.updateStatusIndicators(currentCharacter);
     }
