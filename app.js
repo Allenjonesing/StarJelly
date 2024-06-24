@@ -900,7 +900,6 @@ class BattleScene extends Phaser.Scene {
                     let turns = (statusEffect === 'Stun' ? 1 : (statusEffect === 'Freeze' ? 5 : -1)); // -1 means it doesn't expire automatically
                     targetCharacter.statusEffects.push({ type: statusEffect, turns });
                     this.addHelpText(`${targetCharacter.name} is now affected by ${statusEffect}!`);
-                    console.log('applyStatusEffect... existingEffect.turns: ', existingEffect.turns);
                 }
             }
 
@@ -1090,13 +1089,13 @@ class BattleScene extends Phaser.Scene {
 
                 switch (effect.type) {
                     case 'Poison':
-                        damage = currentCharacter.health * 0.05;
+                        damage = Math.floor(currentCharacter.health * 0.05);
                         currentCharacter.health -= damage;
                         this.addHelpText(`${currentCharacter.name} takes poison damage!`);
                         this.showDamageIndicator(currentCharacter.sprite, damage);
                         break;
                     case 'Burn':
-                        damage = currentCharacter.health * 0.05;
+                        damage = Math.floor(currentCharacter.health * 0.05);
                         currentCharacter.health -= damage;
                         this.addHelpText(`${currentCharacter.name} takes burn damage!`);
                         this.showDamageIndicator(currentCharacter.sprite, damage);
