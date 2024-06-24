@@ -58,7 +58,7 @@ class ExplorationScene extends Phaser.Scene {
         this.prepBase64Images();
 
         // Spawn enemies after data is ready
-        startBattle();
+        this.startBattle();
         // Remove the loading text after all steps are complete
         loadingText.destroy();
     }
