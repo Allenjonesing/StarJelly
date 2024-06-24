@@ -250,9 +250,13 @@ class BattleScene extends Phaser.Scene {
     }
 
     updateHelpTextDisplay() {
-        this.addHelpText(this.helpMessages.join('\n'));
+        if (this.helpMessages && Array.isArray(this.helpMessages)) {
+            this.helpText.setText(this.helpMessages.join('\n'));
+        } else {
+            this.helpText.setText('');
+        }
     }
-
+    
     resize(gameSize, baseSize, displaySize, resolution) {
         let width = gameSize.width;
         let height = gameSize.height;
