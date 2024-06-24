@@ -796,10 +796,11 @@ class BattleScene extends Phaser.Scene {
         console.log('applyStatusEffect... caster: ', caster);
         console.log('applyStatusEffect... target: ', target);
         console.log('applyStatusEffect... statusEffect: ', statusEffect);
+    
         this.time.delayedCall(150, () => {  // Delay of 1 second for a more natural response
             let targetCharacter = target === 'Player' ? this.player : this.enemy;
             let casterCharacter = caster === 'Player' ? this.player : this.enemy;
-
+    
             if (targetCharacter.immunities.includes(statusEffect)) {
                 this.helpText.setText(`${targetCharacter.name} is immune to ${statusEffect}!`);
                 if (caster === 'Enemy') {
@@ -818,11 +819,11 @@ class BattleScene extends Phaser.Scene {
                     this.helpText.setText(`${targetCharacter.name} is now affected by ${statusEffect}!`);
                 }
             }
-
+    
             this.updateStatusIndicators(targetCharacter);
         }, [], this);
     }
-
+    
     updateStatusIndicators(character) {
         if (character.statusIndicators) {
             character.statusIndicators.clear(true, true);
@@ -1062,12 +1063,16 @@ class BattleScene extends Phaser.Scene {
 
     playMagicAttackAnimation(attacker, defender, elementType, damage, critical, elementValue) {
         let color;
+        let statusEffect = null;
+    
         switch (elementType) {
             case 'fire':
                 color = 0xff4500; // Orange
+                statusEffect = 'Burn';
                 break;
             case 'ice':
                 color = 0x00ffff; // Cyan
+                statusEffect = 'Freeze';
                 break;
             case 'water':
                 color = 0x1e90ff; // DodgerBlue
@@ -1079,18 +1084,23 @@ class BattleScene extends Phaser.Scene {
                 color = 0xffffff; // Default to white
                 break;
         }
-
+    
         let magicBall = this.add.circle(attacker.x, attacker.y, 30, color);
         this.physics.add.existing(magicBall);
         this.physics.moveTo(magicBall, defender.x, defender.y, 500);
-
+    
         this.time.delayedCall(500, () => {
             magicBall.destroy();
             this.applyEffect(defender, color);
             this.showDamageIndicator(defender, damage, critical, elementValue);
+    
+            // Inflict status effect if applicable
+            if (statusEffect && !defender.immunities.includes(statusEffect)) {
+                this.applyStatusEffect(attacker.name, defender.name, statusEffect);
+            }
         });
     }
-}
+    }
 
 const config = {
     type: Phaser.AUTO,
