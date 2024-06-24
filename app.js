@@ -36,27 +36,27 @@ class ExplorationScene extends Phaser.Scene {
             wordWrap: { width: window.innerWidth - 40 }
         }).setOrigin(0.5).setAlign('center');
 
+        
+        // Fetch news data and generate AI responses
+        await fetchNews();
+        loadingText.setText(`${loadingText.text}\n\nBased on the article: ${newsData[0].title}`);
+        
+        await generateAIResponses();
+        loadingText.setText(`${loadingText.text}\n\nYou'll play as: ${persona.name}, ${persona.description}`);
+        loadingText.setText(`${loadingText.text}\n\nYou'll be fighting: ${monsterDescription}`);
+        
+        const newsArticle = newsData[0]; // Use the first article for the enemy
+        enemyImageBase64 = await generateEnemyImage(newsArticle, setting);
+        
+        // Prep Base64 images
+        this.prepBase64Images();
+        
         // Create player
         this.player = this.physics.add.sprite(400, 300, 'player');
         this.player.setCollideWorldBounds(true);
 
         // Initialize enemies group
         this.enemies = this.physics.add.group();
-
-        // Fetch news data and generate AI responses
-        await fetchNews();
-        loadingText.setText(`${loadingText.text}\n\nBased on the article: ${newsData[0].title}`);
-
-        await generateAIResponses();
-        loadingText.setText(`${loadingText.text}\n\nYou'll play as: ${persona.name}, ${persona.description}`);
-        loadingText.setText(`${loadingText.text}\n\nYou'll be fighting: ${monsterDescription}`);
-
-        const newsArticle = newsData[0]; // Use the first article for the enemy
-        enemyImageBase64 = await generateEnemyImage(newsArticle, setting);
-
-        // Prep Base64 images
-        this.prepBase64Images();
-
         // Spawn enemies after data is ready
         spawnEnemies(this);
         // Remove the loading text after all steps are complete
@@ -1183,7 +1183,7 @@ async function generateEnemyImage(newsArticle, setting) {
 function spawnEnemies(scene) {
     if (newsData.length > 0) {
         for (let i = 0; i < 3; i++) {
-            let x = Phaser.Math.Between(scene.player.sprite.x, scene.player.sprite.y);
+            let x = Phaser.Math.Between(400, 300);
             let y = Phaser.Math.Between(50, window.innerHeight - 50);
             let enemy = scene.enemies.create(x, y, 'enemy');
             enemy.setCollideWorldBounds(true);
