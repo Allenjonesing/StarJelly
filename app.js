@@ -895,7 +895,6 @@ this.addHelpText(`A battle has begun!`);
                     console.log('applyStatusEffect... existingEffect.turns: ', existingEffect.turns);
                 } else {
                     console.log('applyStatusEffect... statusEffect: ', statusEffect);
-                    console.log('applyStatusEffect... existingEffect.turns: ', existingEffect.turns);
                     let turns = (statusEffect === 'Stun' ? 1 : (statusEffect === 'Freeze' ? 5 : -1)); // -1 means it doesn't expire automatically
                     targetCharacter.statusEffects.push({ type: statusEffect, turns });
                     this.addHelpText(`${targetCharacter.name} is now affected by ${statusEffect}!`);
