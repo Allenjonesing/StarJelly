@@ -1167,13 +1167,11 @@ async function generateEnemyImage(newsArticle, setting) {
             if (parsedBody && parsedBody.base64_image) {
                 return `data:image/png;base64,${parsedBody.base64_image}`;
             } else {
-                location.reload();
                 throw new Error('No image generated');
             }
         } catch (error) {
-            location.reload();
             console.error('Error generating enemy image:', error);
-            throw new Error('No image generated');
+            return generateEnemyImage(newsArticle, setting); // Retry on failure
         }
     } else {
         // Cost Saving Mode
@@ -1205,35 +1203,30 @@ async function fetchNews() {
         const response = await fetch(apiUrl + newsEndpoint);
 
         if (!response.ok) {
-            location.reload();
             throw new Error(`HTTP error! Status: ${response.status}`);
         }
 
         const jsonData = await response.json();
 
         if (!jsonData) {
-            location.reload();
             throw new Error('No Data gathered!');
         }
 
         const bodyData = JSON.parse(jsonData.body);
 
         if (!bodyData) {
-            location.reload();
             throw new Error('No body found in the response!');
         }
 
         if (!bodyData.articles) {
-            location.reload();
             throw new Error('No articles found in the body!');
         }
 
         newsData = structureNewsData(bodyData.articles.sort(() => 0.5 - Math.random()).slice(0, 1));
         return;
     } catch (error) {
-        location.reload();
         console.error('Error fetching news:', error);
-        return;
+        return fetchNews(); // Retry on failure
     }
 }
 
@@ -1320,8 +1313,8 @@ async function generateAIResponses() {
                                     throw new Error('No image generated');
                                 }
                             } catch (error) {
-                                loacation.reload();
                                 console.error('Error generating AI response:', error);
+                                return generateAIResponses(); // Retry on failure
                             }
                         } else {
                             // Cost Saving Mode
@@ -1331,13 +1324,13 @@ async function generateAIResponses() {
                         }
                     }
                 } catch (error) {
-                    loacation.reload();
                     console.error('Error generating AI response:', error);
+                    return generateAIResponses(); // Retry on failure
                 }
             }
         } catch (error) {
-            loacation.reload();
             console.error('Error generating AI response:', error);
+            return generateAIResponses(); // Retry on failure
         }
     }
     return responses;
@@ -1399,7 +1392,7 @@ async function fetchEnemyStats() {
         }
     } catch (error) {
         console.error('Error fetching enemy stats:', error);
-        throw new Error('No stats generated');
+        return fetchEnemyStats(); // Retry on failure
     }
 }
 
@@ -1428,6 +1421,6 @@ async function fetchPlayerStats() {
         }
     } catch (error) {
         console.error('Error fetching player stats:', error);
-        throw new Error('No stats generated');
+        return fetchPlayerStats(); // Retry on failure
     }
 }
