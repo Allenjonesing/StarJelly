@@ -972,23 +972,21 @@ class BattleScene extends Phaser.Scene {
 
     isCharacterFrozenOrStunned(character) {
         console.log('isCharacterFrozenOrStunned... character: ', character);
-
+    
         const frozenStatus = character.statusEffects.find(effect => effect.type === 'Freeze');
         const stunnedStatus = character.statusEffects.find(effect => effect.type === 'Stun');
-
-        console.log('isCharacterFrozenOrStunned... frozenStatus: ', frozenStatus);
+    
         if (frozenStatus) {
             frozenStatus.turns--;
             if (frozenStatus.turns <= 0) {
                 character.statusEffects = character.statusEffects.filter(effect => effect.type !== 'Freeze');
-                console.log('isCharacterFrozenOrStunned... character.statusEffects: ', character.statusEffects);
                 this.updateStatusIndicators(character);
                 return false;
             }
             this.helpText.setText(`${character.name} is frozen and skips a turn!`);
             return true;
         }
-
+    
         if (stunnedStatus) {
             stunnedStatus.turns--;
             if (stunnedStatus.turns <= 0) {
@@ -999,51 +997,50 @@ class BattleScene extends Phaser.Scene {
             this.helpText.setText(`${character.name} is stunned and skips a turn!`);
             return true;
         }
-
+    
         return false;
     }
-
+    
     handleStatusEffects() {
         const currentCharacter = this.turnOrder[this.currentTurnIndex].name === 'Player' ? this.player : this.enemy;
-
+    
         for (let i = currentCharacter.statusEffects.length - 1; i >= 0; i--) {
             this.time.delayedCall(500 * i, () => {
                 let effect = currentCharacter.statusEffects[i];
                 let damage = 0;
-
+    
                 switch (effect.type) {
                     case 'Poison':
                         damage = currentCharacter.health * 0.05;
-                        currentCharacter.health -= damage; // Example poison damage
+                        currentCharacter.health -= damage;
                         this.helpText.setText(`${currentCharacter.name} takes poison damage!`);
                         this.showDamageIndicator(currentCharacter.sprite, damage);
-
                         break;
                     case 'Burn':
                         damage = currentCharacter.health * 0.05;
-                        currentCharacter.health -= 15; // Example burn damage
+                        currentCharacter.health -= damage;
                         this.helpText.setText(`${currentCharacter.name} takes burn damage!`);
                         this.showDamageIndicator(currentCharacter.sprite, damage);
                         break;
                     // Stun and Freeze are handled in isCharacterFrozenOrStunned method
                 }
-
+    
                 if (effect.turns > 0) {
                     effect.turns--;
                     if (effect.turns === 0) {
                         currentCharacter.statusEffects.splice(i, 1);
                     }
                 }
-
+    
                 if (currentCharacter.health <= 0) {
                     this.endBattle(currentCharacter.name === 'Player' ? 'lose' : 'win');
                 }
             }, [], this);
         }
-
+    
         this.updateStatusIndicators(currentCharacter);
     }
-
+    
     showPlayerActions() {
         this.actions.children.each(action => action.setVisible(true));
         this.actionBox.setVisible(true);
