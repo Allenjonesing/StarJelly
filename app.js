@@ -53,6 +53,7 @@ class ExplorationScene extends Phaser.Scene {
 
         // Create player
         this.player = this.physics.add.sprite(400, 300, 'player');
+        this.player.description = `${persona.name}, ${persona.description}`;
         this.player.setCollideWorldBounds(true);
 
         // Initialize enemies group
@@ -1252,6 +1253,8 @@ function spawnEnemies(scene) {
         enemy.setCollideWorldBounds(true);
         scene.physics.add.collider(scene.player, scene.enemies, scene.startBattle, null, scene);
         scene.physics.add.collider(scene.enemies, scene.enemies);
+        enemy.description = `${monsterDescription}`;
+
     } else {
         console.error('No news data available to generate enemies');
     }
