@@ -513,7 +513,7 @@ this.addHelpText(`A battle has begun!`);
             orderText += `${this.turnOrder[(this.currentTurnIndex + i) % this.turnOrder.length].name}\n`;
         }
 
-        this.turnOrderList = this.add.text(this.scale.width - 150, this.scale.height / 2 + 30, orderText, { fontSize: '30px', fill: '#fff' });
+        this.turnOrderList = this.add.text(this.scale.width / 2, this.scale.height / 2 + 30, orderText, { fontSize: '30px', fill: '#fff' });
 
         this.turnOrderList.alpha = 0;
         this.tweens.add({
