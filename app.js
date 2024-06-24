@@ -555,7 +555,8 @@ class BattleScene extends Phaser.Scene {
 
         // Add skill buttons to the new action box
         skills.forEach((skill, index) => {
-            const x = 40 + index * 150; // Adjust spacing as necessary
+            const elementWidth = (this.scale.width - 100) / skills.length;
+            const x = 100 + index * elementWidth; // Adjust spacing as necessary
             const skillText = this.add.text(x, skillBoxY + 25, skill, {
                 fontSize: '20px',
                 fill: '#fff',
