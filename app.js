@@ -1037,12 +1037,6 @@ class BattleScene extends Phaser.Scene {
         this.currentTurnIndex = (this.currentTurnIndex + 1) % this.turnOrder.length;
         const currentCharacter = this.turnOrder[this.currentTurnIndex].name === 'Player' ? this.player : this.enemy;
 
-        // Decrement status effect turns only here
-        for (let effect of currentCharacter.statusEffects) {
-            if (effect.turns > 0) {
-                effect.turns--;
-            }
-        }
 
         this.handleStatusEffects();
 
@@ -1058,6 +1052,13 @@ class BattleScene extends Phaser.Scene {
                 console.error('this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
             }
             this.updateTurnOrderDisplay();
+        }
+        
+        // Decrement status effect turns only here
+        for (let effect of currentCharacter.statusEffects) {
+            if (effect.turns > 0) {
+                effect.turns--;
+            }
         }
     }
 
