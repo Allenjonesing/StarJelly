@@ -451,7 +451,7 @@ class BattleScene extends Phaser.Scene {
         const actionButtonWidth = (this.scale.width - padding * 2) / 5;
 
         actionNames.forEach((actionName, index) => {
-            const x = ((padding) + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
+            const x = ((padding * 4) + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
             const actionText = this.add.text(x, this.scale.height - actionButtonHeight - padding, actionName, {
                 fontSize: '30px',
                 fill: '#fff',
@@ -1055,7 +1055,7 @@ class BattleScene extends Phaser.Scene {
         // Move to the next character's turn
         this.currentTurnIndex = (this.currentTurnIndex + 1) % this.turnOrder.length;
         const currentCharacter = this.turnOrder[this.currentTurnIndex].name === 'Player' ? this.player : this.enemy;
-        
+
         if (this.isCharacterFrozenOrStunned(currentCharacter)) {
             this.startCooldown();
         } else {
@@ -1069,7 +1069,7 @@ class BattleScene extends Phaser.Scene {
             }
             this.updateTurnOrderDisplay();
         }
-        
+
         // Decrement status effect turns only here
         for (let effect of currentCharacter.statusEffects) {
             if (effect.turns > 0) {
@@ -1157,7 +1157,7 @@ class BattleScene extends Phaser.Scene {
             yoyo: true,
             ease: 'Power1'
         });
-    
+
         this.time.delayedCall(150, () => {
             this.tweens.add({
                 targets: defender,
@@ -1172,7 +1172,7 @@ class BattleScene extends Phaser.Scene {
             });
         }, [], this);
     }
-    
+
     playMagicAttackAnimation(attacker, defender, elementType, damage, critical, elementValue) {
         let color;
         let statusEffect = null;
