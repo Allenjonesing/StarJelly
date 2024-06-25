@@ -1651,7 +1651,7 @@ async function generateAIResponses() {
 }
 
 async function generatePersona(description) {
-    const prompt = `Generate a persona based on the following description:\n\nDescription: ${description}`;
+    const prompt = `Generate a persona based on the following description:\n\nDescription: ${description} (Ensure no likeness to real people/places/brands/games) for a ${setting} setting in JSON format. It should have a name and a description.`;
 
     try {
         const response = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodeURIComponent(prompt)}`, {
