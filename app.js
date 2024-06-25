@@ -31,20 +31,12 @@ class ExplorationScene extends Phaser.Scene {
 
         this.add.text(20, 20, 'Enter a short description for your character:', { fontSize: '24px', fill: '#fff' });
 
-        let inputElement = this.add.dom(400, 100, 'input', {
-            type: 'text',
-            name: 'description',
-            placeholder: 'Enter description here...',
-            fontSize: '24px',
-            width: '300px'
-        });
-
         let submitButton = this.add.text(400, 150, 'Submit', { fontSize: '32px', fill: '#fff' })
             .setOrigin(0.5)
             .setInteractive()
             .on('pointerdown', async () => {
-                let description = inputElement.node.value;
-                if (description.trim() !== '') {
+                let description = prompt('Enter description here...');
+                if (description && description.trim() !== '') {
                     let success = await generatePersona(description);
                     if (success) {
                         this.startExploration();
