@@ -367,7 +367,7 @@ class BattleScene extends Phaser.Scene {
         this.uiContainer = this.add.container(0, 0);
 
         // Set padding and element dimensions
-        const padding = this.scale.width / 20;
+        const padding = this.scale.width / 10;
         const topMargin = 200;
         const elementHeight = 30;
         const actionButtonHeight = 50;
