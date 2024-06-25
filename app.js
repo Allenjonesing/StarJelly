@@ -29,6 +29,33 @@ class ExplorationScene extends Phaser.Scene {
     async create() {
         this.scale.on('resize', this.resize, this);
 
+        this.add.text(20, 20, 'Enter a short description for your character:', { fontSize: '24px', fill: '#fff' });
+
+        // Add input field
+        let inputElement = this.add.dom(400, 100, 'input', {
+            type: 'text',
+            name: 'description',
+            placeholder: 'Enter description here...',
+            fontSize: '24px',
+            width: '300px'
+        });
+
+        // Add button to submit description
+        let submitButton = this.add.text(400, 150, 'Submit', { fontSize: '32px', fill: '#fff' })
+            .setOrigin(0.5)
+            .setInteractive()
+            .on('pointerdown', async () => {
+                let description = inputElement.node.value;
+                if (description.trim() !== '') {
+                    let success = await generatePersona(description);
+                    if (success) {
+                        this.startExploration();
+                    } else {
+                        alert('Persona generation failed, please try again.');
+                    }
+                }
+            });
+
         // Add a loading text
         let loadingText = this.add.text(window.innerWidth / 2, window.innerHeight / 2, `Loading Version: ${version}...`, {
             fontSize: '32px',
@@ -46,6 +73,9 @@ class ExplorationScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
 
+    }
+
+    async startExploration() {
         // Fetch news data and generate AI responses
         await fetchNews();
         loadingText.setText(`${loadingText.text}\n\nBased on the article: ${newsData[0].title}`);
@@ -62,12 +92,12 @@ class ExplorationScene extends Phaser.Scene {
 
         // Create player
         this.player = this.physics.add.sprite(400, 300, 'player');
-        this.player.description = `${persona.name}, ${persona.description}`;
+this.player.description = `${persona.name}, ${persona.description}`;
         this.player.setCollideWorldBounds(true);
 
-        // Initialize enemies group
+// Initialize enemies group
         this.enemies = this.physics.add.group();
-        // Spawn enemies after data is ready
+// Spawn enemies after data is ready
         spawnEnemies(this);
         // Remove the loading text and warning text after all steps are complete
         loadingText.destroy();
@@ -79,6 +109,12 @@ class ExplorationScene extends Phaser.Scene {
             this.textures.addBase64('enemyImageBase64', enemyImageBase64);
             this.textures.addBase64('npcBase64image', npcBase64image);
         }
+    }
+
+    spawnEnemy() {
+        let enemy = this.enemies.create(400, 300, 'enemyImageBase64');
+        enemy.setCollideWorldBounds(true);
+        enemy.description = `${monsterDescription}`;
     }
 
     startBattle(player, enemy) {
@@ -1609,22 +1645,19 @@ async function generateAIResponses() {
             if (settingResponseJson && settingResponseJson.choices && settingResponseJson.choices[0] && settingResponseJson.choices[0].message && settingResponseJson.choices[0].message.content) {
                 const textContent = settingResponseJson.choices[0].message.content;
 
-                personas = await generatePersonas(textContent);
-                let foundPersonas = personas.characters && Array.isArray(personas.characters) ? personas.characters : personas;
-                persona = foundPersonas[i % foundPersonas.length]; // Cycle through personas
-                prompt = `As ${persona.name}, ${persona.description}, in the setting chosen: ${setting}. Describe in 10-20 words a Monster that we'll be faced to fight due to a made up reason that makes sense.`;
+                const promptPersona = `As ${persona.name}, ${persona.description}, in the setting chosen: ${setting}. Describe in 10-20 words a Monster that we'll be faced to fight due to a made-up reason that makes sense. Consider the player's level: ${player.level}.`;
 
                 try {
-                    const monsterDescriptionResponse = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodeURIComponent(prompt)}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ prompt: prompt })
-                    });
+                    const monsterDescriptionResponse = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodeURIComponent(promptPersona)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ prompt: promptPersona })
+                });
 
-                    if (!monsterDescriptionResponse.ok) {
-                        throw new Error('Network response was not ok');
+                if (!monsterDescriptionResponse.ok) {
+throw new Error('Network response was not ok');
                     }
 
                     const monsterDescriptionResponseJson = await monsterDescriptionResponse.json();
@@ -1644,18 +1677,18 @@ async function generateAIResponses() {
                                 });
 
                                 if (!imageResponse.ok) {
-                                    throw new Error('Network response was not ok');
+throw new Error('Network response was not ok');
                                 }
 
-                                const data = await imageResponse.json();
-                                const parsedBody = JSON.parse(data.body);
-                                if (parsedBody && parsedBody.base64_image) {
-                                    const base64string = `data:image/png;base64,${parsedBody.base64_image}`;
-                                    responses.push({ response: monsterDescription, persona: persona, imageBase64: base64string });
-                                    npcBase64image = base64string; // Cache player image correctly
-                                } else {
-                                    throw new Error('No image generated');
-                                }
+                                    const data = await imageResponse.json();
+                                    const parsedBody = JSON.parse(data.body);
+                                    if (parsedBody && parsedBody.base64_image) {
+                                        const base64string = `data:image/png;base64,${parsedBody.base64_image}`;
+                                        responses.push({ response: monsterDescription, persona: persona, imageBase64: base64string });
+                                        npcBase64image = base64string; // Cache player image correctly
+                                    } else {
+                                        throw new Error('No image generated');
+                                                                    }
                             } catch (error) {
                                 console.error('Error generating AI response:', error);
                                 return generateAIResponses(); // Retry on failure
@@ -1667,7 +1700,7 @@ async function generateAIResponses() {
                             responses.push({ response: monsterDescription, persona: persona, imageBase64: npcBase64image });
                         }
                     }
-                } catch (error) {
+} catch (error) {
                     console.error('Error generating AI response:', error);
                     return generateAIResponses(); // Retry on failure
                 }
@@ -1680,13 +1713,11 @@ async function generateAIResponses() {
     return responses;
 }
 
-async function generatePersonas(setting) {
-    const prompt = `Generate 5 short (5-10 word) and detailed fictional character (Ensure no likeness to real people/places/brands) for a ${setting} setting in JSON format. Each persona should have a name and a description.`;
-    const encodedPrompt = encodeURIComponent(prompt);
-    let parsedPersonas = [];
+async function generatePersona(description) {
+    const prompt = `Generate a persona based on the following description:\n\nDescription: ${description}`;
 
     try {
-        const response = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodedPrompt}`, {
+        const response = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodeURIComponent(prompt)}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1701,14 +1732,15 @@ async function generatePersonas(setting) {
         const aiResponse = await response.json();
 
         if (aiResponse && aiResponse.choices && aiResponse.choices[0] && aiResponse.choices[0].message && aiResponse.choices[0].message.content) {
-            parsedPersonas = JSON.parse(aiResponse.choices[0].message.content);
+            persona = JSON.parse(aiResponse.choices[0].message.content);
+            return true;
+        } else {
+            return false;
         }
     } catch (error) {
-        loacation.reload();
-        console.error('Error generating AI response:', error);
+        console.error('Error generating persona:', error);
+        return false;
     }
-
-    return parsedPersonas;
 }
 
 async function fetchEnemyStats() {
