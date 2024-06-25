@@ -62,12 +62,12 @@ class ExplorationScene extends Phaser.Scene {
 
         // Create player
         this.player = this.physics.add.sprite(400, 300, 'player');
-this.player.description = `${persona.name}, ${persona.description}`;
+        this.player.description = `${persona.name}, ${persona.description}`;
         this.player.setCollideWorldBounds(true);
 
-// Initialize enemies group
+        // Initialize enemies group
         this.enemies = this.physics.add.group();
-    // Spawn enemies after data is ready
+        // Spawn enemies after data is ready
         spawnEnemies(this);
         // Remove the loading text and warning text after all steps are complete
         loadingText.destroy();
@@ -1616,15 +1616,15 @@ async function generateAIResponses() {
 
                 try {
                     const monsterDescriptionResponse = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodeURIComponent(prompt)}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ prompt: prompt })
-                });
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ prompt: prompt })
+                    });
 
-                if (!monsterDescriptionResponse.ok) {
-throw new Error('Network response was not ok');
+                    if (!monsterDescriptionResponse.ok) {
+                        throw new Error('Network response was not ok');
                     }
 
                     const monsterDescriptionResponseJson = await monsterDescriptionResponse.json();
@@ -1644,18 +1644,18 @@ throw new Error('Network response was not ok');
                                 });
 
                                 if (!imageResponse.ok) {
-throw new Error('Network response was not ok');
+                                    throw new Error('Network response was not ok');
                                 }
 
-                                    const data = await imageResponse.json();
-                                    const parsedBody = JSON.parse(data.body);
-                                    if (parsedBody && parsedBody.base64_image) {
-                                        const base64string = `data:image/png;base64,${parsedBody.base64_image}`;
-                                        responses.push({ response: monsterDescription, persona: persona, imageBase64: base64string });
-                                        npcBase64image = base64string; // Cache player image correctly
-                                    } else {
-                                        throw new Error('No image generated');
-                                                                    }
+                                const data = await imageResponse.json();
+                                const parsedBody = JSON.parse(data.body);
+                                if (parsedBody && parsedBody.base64_image) {
+                                    const base64string = `data:image/png;base64,${parsedBody.base64_image}`;
+                                    responses.push({ response: monsterDescription, persona: persona, imageBase64: base64string });
+                                    npcBase64image = base64string; // Cache player image correctly
+                                } else {
+                                    throw new Error('No image generated');
+                                }
                             } catch (error) {
                                 console.error('Error generating AI response:', error);
                                 return generateAIResponses(); // Retry on failure
@@ -1667,7 +1667,7 @@ throw new Error('Network response was not ok');
                             responses.push({ response: monsterDescription, persona: persona, imageBase64: npcBase64image });
                         }
                     }
-} catch (error) {
+                } catch (error) {
                     console.error('Error generating AI response:', error);
                     return generateAIResponses(); // Retry on failure
                 }
@@ -1702,11 +1702,11 @@ async function generatePersonas(setting) {
 
         if (aiResponse && aiResponse.choices && aiResponse.choices[0] && aiResponse.choices[0].message && aiResponse.choices[0].message.content) {
             parsedPersonas = JSON.parse(aiResponse.choices[0].message.content);
-                    }
+        }
     } catch (error) {
         loacation.reload();
         console.error('Error generating AI response:', error);
-            }
+    }
 
     return parsedPersonas;
 }
