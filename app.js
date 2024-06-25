@@ -1681,7 +1681,7 @@ async function generatePersona(description) {
 }
 
 async function fetchEnemyStats() {
-    const levelMultiplier = player.level;
+    const levelMultiplier = this.player ? this.player.level : 1;
     const prompt = `Generate stats for an enemy based on this description: ${monsterDescription}. The enemy's stats should be balanced according to a level of ${levelMultiplier}, with total stats comparable to the player's but with offsets in specific areas like attack, defense, or magic. ${statRequirements}`;
     const encodedPrompt = encodeURIComponent(prompt);
 
