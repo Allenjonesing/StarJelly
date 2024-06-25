@@ -884,7 +884,7 @@ class BattleScene extends Phaser.Scene {
             if (targetCharacter.immunities && targetCharacter.immunities.includes(statusEffect)) {
                 console.log('applyStatusEffect... IMMUNE');
                 this.addHelpText(`${targetCharacter.name} is immune to ${statusEffect}!`);
-                this.showPhraseIndicator(target, 'IMMUNE', '#2bf1ff');
+                this.showPhraseIndicator(targetCharacter, 'IMMUNE', '#2bf1ff');
                 if (caster === 'Enemy') {
                     this.enemy.learnedStatusImmunities[statusEffect] = true;
                 }
@@ -917,7 +917,7 @@ class BattleScene extends Phaser.Scene {
         character.statusIndicators = this.add.group();
         const statusEffects = character.statusEffects;
         for (let i = 0; i < statusEffects.length; i++) {
-            let statusText = this.add.text(character.sprite.x - 100, 200 + i * 30, `${statusEffects[i].type} (${statusEffects[i].turns > 0 ? statusEffects[i].turns : '∞'})`, { fontSize: '20px', fill: '#fff', backgroundColor: '#000', padding: { left: 10, right: 10, top: 5, bottom: 5 } });
+            let statusText = this.add.text(character.sprite.x - 100, 300 + i * 30, `${statusEffects[i].type} (${statusEffects[i].turns > 0 ? statusEffects[i].turns : '∞'})`, { fontSize: '20px', fill: '#fff', backgroundColor: '#000', padding: { left: 10, right: 10, top: 5, bottom: 5 } });
             character.statusIndicators.add(statusText);
         }
     }
