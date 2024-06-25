@@ -62,12 +62,12 @@ class ExplorationScene extends Phaser.Scene {
 
         // Create player
         this.player = this.physics.add.sprite(400, 300, 'player');
-        this.player.description = `${persona.name}, ${persona.description}`;
+this.player.description = `${persona.name}, ${persona.description}`;
         this.player.setCollideWorldBounds(true);
 
-        // Initialize enemies group
+// Initialize enemies group
         this.enemies = this.physics.add.group();
-        // Spawn enemies after data is ready
+    // Spawn enemies after data is ready
         spawnEnemies(this);
         // Remove the loading text and warning text after all steps are complete
         loadingText.destroy();
@@ -82,7 +82,6 @@ class ExplorationScene extends Phaser.Scene {
     }
 
     startBattle(player, enemy) {
-        // Transition to the battle scene, passing necessary data
         this.scene.start('BattleScene', { player: player, enemy: enemy });
     }
 
@@ -123,8 +122,6 @@ class ExplorationScene extends Phaser.Scene {
         if (height === undefined) { height = this.sys.game.config.height; }
 
         this.cameras.resize(width, height);
-
-        // Adjust other elements like UI, if necessary
     }
 }
 
@@ -338,22 +335,21 @@ class BattleScene extends Phaser.Scene {
 
     endBattle(result) {
         battleEnded = true;
-        this.time.delayedCall(1000, () => {
-
+        this.time.delayedCall(1000, async () => {
             if (result === 'win') {
-                // Handle victory logic
-                this.addHelpText('You Won! Please wait for the window to reload...');
-                this.enemy.sprite.destroy(); // Remove enemy sprite
+                gainXp(50);  // Award XP for winning
+                inventory.gold += 100;  // Award gold for winning
+                addItemToInventory('potion');
+                this.addHelpText('You Won!');
+                this.enemy.sprite.destroy();
             } else {
-                // Handle defeat logic
-                this.addHelpText('You Lost! Please wait for the window to reload...');
-                this.player.sprite.destroy(); // Remove player sprite
+                this.addHelpText('You Lost!');
+                this.player.sprite.destroy();
             }
 
-            this.time.delayedCall(4000, () => {
-                // Refresh the whole page after the battle ends
-                location.reload();
-            }, [], this);
+            await generateAIResponses();
+            enemyImageBase64 = await generateEnemyImage(newsData[0], setting);
+            this.scene.start('ShopScene');
         }, [], this);
     }
 
@@ -445,10 +441,13 @@ class BattleScene extends Phaser.Scene {
         // Add elements to the UI container
         this.uiContainer.add([this.playerHealthText, this.playerManaText, this.enemyHealthText, this.enemyManaText, this.turnOrderText]);
 
+        // Display player's gold
+        this.goldText = this.add.text(padding, topMargin + elementHeight * 3, `Gold: ${inventory.gold}`, { fontSize: '26px', fill: '#fff' });
+
         // Action buttons at the bottom
         this.actions = this.add.group();
-        const actionNames = ['Attack', 'Defend', 'Spells', 'Skills', 'Heal'];
-        const actionButtonWidth = (this.scale.width - padding * 2) / 5;
+        const actionNames = ['Attack', 'Defend', 'Spells', 'Skills', 'Heal', 'Items'];
+        const actionButtonWidth = (this.scale.width - padding * 2) / actionNames.length;
 
         actionNames.forEach((actionName, index) => {
             const x = (padding + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
@@ -480,6 +479,97 @@ class BattleScene extends Phaser.Scene {
         // Add action box around action buttons
         this.actionBox = this.add.graphics().lineStyle(2, 0xffff00).strokeRect(padding, this.scale.height - actionButtonHeight - padding * 2, this.scale.width - padding * 2, actionButtonHeight + padding);
         this.uiContainer.add(this.actionBox);
+
+        this.uiContainer.add(this.goldText);
+    }
+
+    gainXp(amount) {
+        player.xp += amount;
+        if (player.xp >= player.xpToNextLevel) {
+            player.xp -= player.xpToNextLevel;
+            levelUp();
+        }
+    }
+
+    levelUp() {
+        player.level++;
+        player.xpToNextLevel = Math.floor(player.xpToNextLevel * 1.5);
+        player.stats.health += 10;
+        player.stats.mana += 5;
+        player.stats.atk += 2;
+        player.stats.def += 2;
+        player.stats.spd += 2;
+        player.stats.eva += 2;
+        player.stats.magAtk += 2;
+        player.stats.magDef += 2;
+        player.stats.luk += 2;
+        player.stats.wis += 2;
+        console.log(`Level Up! New Level: ${player.level}`);
+    }
+
+    useItem(itemName) {
+        let item = inventory.items.find(i => i.name === itemName);
+        if (item && item.count > 0) {
+            if (item.type === 'heal') {
+                player.stats.health = Math.min(player.stats.health + item.amount, 100);
+            } else if (item.type === 'mana') {
+                player.stats.mana = Math.min(player.stats.mana + item.amount, 50);
+            }
+            item.count--;
+            console.log(`${player.name} used ${itemName}`);
+        } else {
+            console.log('Item not found or out of stock!');
+        }
+    }
+
+    addItemToInventory(itemName) {
+        let existingItem = inventory.items.find(i => i.name === itemName);
+        if (existingItem) {
+            existingItem.count++;
+        } else {
+            inventory.items.push({ name: itemName, ...items[itemName], count: 1 });
+        }
+        console.log(`Added ${itemName} to inventory`);
+    }
+
+    showItemSelection() {
+        this.hideSubOptions(); // Hide any existing sub-options
+
+        const itemBoxY = this.scale.height - 200 - 50; // Adjust as necessary
+        const itemBoxWidth = this.scale.width - 40; // Adjust as necessary
+        this.itemBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(20, itemBoxY, itemBoxWidth, 50);
+
+        this.itemButtons = this.add.group();
+        inventory.items.forEach((item, index) => {
+            const elementWidth = (this.scale.width - 100) / inventory.items.length;
+            const x = 100 + index * elementWidth; // Adjust spacing as necessary
+            const itemText = this.add.text(x, itemBoxY + 25, `${item.name} (${item.count})`, {
+                fontSize: '30px',
+                fill: '#fff',
+                backgroundColor: '#000',
+                padding: { left: 10, right: 10, top: 5, bottom: 5 }
+            }).setOrigin(0.5);
+            itemText.setInteractive();
+            itemText.on('pointerdown', () => {
+                useItem(item.name);
+                this.itemButtons.clear(true, true);
+                this.startCooldown();
+                this.hidePlayerActions();
+                this.itemBox.destroy();
+            });
+            this.itemButtons.add(itemText);
+
+            // Add animation and colorful effect
+            this.tweens.add({
+                targets: itemText,
+                scaleX: 1.1,
+                scaleY: 1.1,
+                duration: 500,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Power1'
+            });
+        });
     }
 
     chooseElement() {
@@ -607,6 +697,9 @@ class BattleScene extends Phaser.Scene {
                     this.addHelpText("Not enough mana!");
                     return;
                 }
+            } else if (action === 'Items') {
+                this.showItemSelection();
+                return;
             }
 
             this.enemy.health -= damage;
@@ -1214,6 +1307,154 @@ class BattleScene extends Phaser.Scene {
     }
 }
 
+class ShopScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'ShopScene' });
+    }
+
+    preload() {
+        // Load any assets needed for the shop scene here
+    }
+
+    create() {
+        this.add.text(20, 20, `Gold: ${inventory.gold}`, { fontSize: '32px', fill: '#fff' });
+        this.add.text(20, 60, 'Shop Inventory', { fontSize: '32px', fill: '#fff' });
+
+        let shopInventory = this.generateShopInventory();
+
+        shopInventory.forEach((item, index) => {
+            this.add.text(20, 100 + index * 40, `${item.name} - ${item.cost} gold`, { fontSize: '24px', fill: '#fff' })
+                .setInteractive()
+                .on('pointerdown', () => {
+                    this.buyItem(item);
+                });
+        });
+
+        this.add.text(20, 500, 'Click to Continue', { fontSize: '32px', fill: '#fff' })
+            .setInteractive()
+            .on('pointerdown', () => {
+                this.scene.start('ExplorationScene');
+            });
+    }
+
+    generateShopInventory() {
+        let items = [];
+        let weaponKeys = Object.keys(weapons);
+        let armorKeys = Object.keys(armors);
+
+        // Generate random weapons and armors based on level
+        for (let i = 0; i < 3; i++) {
+            let randomWeapon = weapons[weaponKeys[Math.floor(Math.random() * weaponKeys.length)]];
+            let randomArmor = armors[armorKeys[Math.floor(Math.random() * armorKeys.length)]];
+            items.push({ ...randomWeapon, cost: randomWeapon.cost * (1 + player.level / 10) });
+            items.push({ ...randomArmor, cost: randomArmor.cost * (1 + player.level / 10) });
+        }
+
+        return items;
+    }
+
+    buyItem(item) {
+        if (inventory.gold >= item.cost) {
+            inventory.gold -= item.cost;
+            if (weapons[item.name.toLowerCase()]) {
+                inventory.weapons.push(item);
+            } else if (armors[item.name.toLowerCase()]) {
+                inventory.armors.push(item);
+            }
+            this.scene.restart(); // Refresh the shop UI after purchase
+        } else {
+            console.log('Not enough gold!');
+        }
+    }
+}
+
+class TitleScreenScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'TitleScreenScene' });
+    }
+
+    preload() {
+        // Load any assets needed for the title screen here
+    }
+
+    create() {
+        this.add.text(this.scale.width / 2, this.scale.height / 2 - 100, 'My RPG Game', { fontSize: '64px', fill: '#fff' }).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height / 2, 'Login', { fontSize: '32px', fill: '#fff' })
+            .setOrigin(0.5)
+            .setInteractive()
+            .on('pointerdown', () => {
+                this.scene.start('LoginScene');
+            });
+
+        this.add.text(this.scale.width / 2, this.scale.height / 2 + 50, 'Sign Up', { fontSize: '32px', fill: '#fff' })
+            .setOrigin(0.5)
+            .setInteractive()
+            .on('pointerdown', () => {
+                this.scene.start('SignUpScene');
+            });
+
+        this.add.text(this.scale.width / 2, this.scale.height / 2 + 100, 'Play as Guest', { fontSize: '32px', fill: '#fff' })
+            .setOrigin(0.5)
+            .setInteractive()
+            .on('pointerdown', () => {
+                this.scene.start('ExplorationScene');
+            });
+    }
+}
+
+class LoginScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'LoginScene' });
+    }
+
+    preload() {
+        // Load any assets needed for the login screen here
+    }
+
+    create() {
+        this.add.text(this.scale.width / 2, this.scale.height / 2 - 100, 'Login', { fontSize: '64px', fill: '#fff' }).setOrigin(0.5);
+
+        // Placeholder for input fields
+        this.add.text(this.scale.width / 2, this.scale.height / 2 - 50, 'Username:', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height / 2, 'Password:', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5);
+
+        // Back button
+        this.add.text(this.scale.width / 2, this.scale.height / 2 + 100, 'Back', { fontSize: '32px', fill: '#fff' })
+            .setOrigin(0.5)
+            .setInteractive()
+            .on('pointerdown', () => {
+                this.scene.start('TitleScreenScene');
+            });
+    }
+}
+
+class SignUpScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'SignUpScene' });
+    }
+
+    preload() {
+        // Load any assets needed for the sign-up screen here
+    }
+
+    create() {
+        this.add.text(this.scale.width / 2, this.scale.height / 2 - 100, 'Sign Up', { fontSize: '64px', fill: '#fff' }).setOrigin(0.5);
+
+        // Placeholder for input fields
+        this.add.text(this.scale.width / 2, this.scale.height / 2 - 50, 'Username:', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height / 2, 'Password:', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5);
+        this.add.text(this.scale.width / 2, this.scale.height / 2 + 50, 'Confirm Password:', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5);
+
+        // Back button
+        this.add.text(this.scale.width / 2, this.scale.height / 2 + 150, 'Back', { fontSize: '32px', fill: '#fff' })
+            .setOrigin(0.5)
+            .setInteractive()
+            .on('pointerdown', () => {
+                this.scene.start('TitleScreenScene');
+            });
+    }
+}
+
 const config = {
     type: Phaser.AUTO,
     width: window.innerWidth,
@@ -1222,7 +1463,7 @@ const config = {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    scene: [ExplorationScene, BattleScene],
+    scene: [TitleScreenScene, LoginScene, SignUpScene, ExplorationScene, BattleScene, ShopScene],
     physics: {
         default: 'arcade',
         arcade: {
@@ -1348,7 +1589,7 @@ async function generateAIResponses() {
 
     for (let i = 0; i < newsData.length; i++) {
         const news = newsData[i];
-        var prompt = `Describe in 10-20 words a fictional version of following news article with no likeness to real people or brand names:\n\nTitle: ${news.title}\nDescription: ${news.description}`;
+        const prompt = `Describe in 10-20 words a fictional version of the following news article with no likeness to real people or brand names:\n\nTitle: ${news.title}\nDescription: ${news.description}`;
 
         try {
             const settingResponse = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodeURIComponent(prompt)}`, {
@@ -1375,15 +1616,15 @@ async function generateAIResponses() {
 
                 try {
                     const monsterDescriptionResponse = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodeURIComponent(prompt)}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ prompt: prompt })
-                    });
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ prompt: prompt })
+                });
 
-                    if (!monsterDescriptionResponse.ok) {
-                        throw new Error('Network response was not ok');
+                if (!monsterDescriptionResponse.ok) {
+throw new Error('Network response was not ok');
                     }
 
                     const monsterDescriptionResponseJson = await monsterDescriptionResponse.json();
@@ -1403,18 +1644,18 @@ async function generateAIResponses() {
                                 });
 
                                 if (!imageResponse.ok) {
-                                    throw new Error('Network response was not ok');
+throw new Error('Network response was not ok');
                                 }
 
-                                const data = await imageResponse.json();
-                                const parsedBody = JSON.parse(data.body);
-                                if (parsedBody && parsedBody.base64_image) {
-                                    const base64string = `data:image/png;base64,${parsedBody.base64_image}`;
-                                    responses.push({ response: monsterDescription, persona: persona, imageBase64: base64string });
-                                    npcBase64image = base64string; // Cache player image correctly
-                                } else {
-                                    throw new Error('No image generated');
-                                }
+                                    const data = await imageResponse.json();
+                                    const parsedBody = JSON.parse(data.body);
+                                    if (parsedBody && parsedBody.base64_image) {
+                                        const base64string = `data:image/png;base64,${parsedBody.base64_image}`;
+                                        responses.push({ response: monsterDescription, persona: persona, imageBase64: base64string });
+                                        npcBase64image = base64string; // Cache player image correctly
+                                    } else {
+                                        throw new Error('No image generated');
+                                                                    }
                             } catch (error) {
                                 console.error('Error generating AI response:', error);
                                 return generateAIResponses(); // Retry on failure
@@ -1426,7 +1667,7 @@ async function generateAIResponses() {
                             responses.push({ response: monsterDescription, persona: persona, imageBase64: npcBase64image });
                         }
                     }
-                } catch (error) {
+} catch (error) {
                     console.error('Error generating AI response:', error);
                     return generateAIResponses(); // Retry on failure
                 }
@@ -1461,17 +1702,18 @@ async function generatePersonas(setting) {
 
         if (aiResponse && aiResponse.choices && aiResponse.choices[0] && aiResponse.choices[0].message && aiResponse.choices[0].message.content) {
             parsedPersonas = JSON.parse(aiResponse.choices[0].message.content);
-        }
+                    }
     } catch (error) {
         loacation.reload();
         console.error('Error generating AI response:', error);
-    }
+            }
 
     return parsedPersonas;
 }
 
 async function fetchEnemyStats() {
-    const prompt = `Generate stats for an enemy based on this description: ${monsterDescription}. ${statRequirements}`;
+    const levelMultiplier = player.level; // Multiplier based on player's level
+    const prompt = `Generate stats for an enemy based on this description: ${monsterDescription}. The enemy's stats should be balanced according to a level of ${levelMultiplier}, with total stats comparable to the player's but with offsets in specific areas like attack, defense, or magic. ${statRequirements}`;
     const encodedPrompt = encodeURIComponent(prompt);
 
     try {
