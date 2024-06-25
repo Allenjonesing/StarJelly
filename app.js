@@ -884,7 +884,7 @@ class BattleScene extends Phaser.Scene {
             if (targetCharacter.immunities && targetCharacter.immunities.includes(statusEffect)) {
                 console.log('applyStatusEffect... IMMUNE');
                 this.addHelpText(`${targetCharacter.name} is immune to ${statusEffect}!`);
-                this.showPhraseIndicator(targetCharacter, 'IMMUNE', '#2bf1ff');
+                this.showPhraseIndicator(targetCharacter.sprite, 'IMMUNE', '#2bf1ff');
                 if (caster === 'Enemy') {
                     this.enemy.learnedStatusImmunities[statusEffect] = true;
                 }
