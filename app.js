@@ -426,8 +426,8 @@ class BattleScene extends Phaser.Scene {
         const playerDescriptionText = `${this.player.name}: ${this.player.description}`;
         const enemyDescriptionText = `${this.enemy.name}: ${this.enemy.description}`;
 
-        const playerDescription = this.add.text(padding, this.player.sprite.y + 50, playerDescriptionText, { fontSize: '14px', fill: '#fff', wordWrap: { width: 200 } });
-        const enemyDescription = this.add.text(this.scale.width - padding - 200, this.enemy.sprite.y + 50, enemyDescriptionText, { fontSize: '14px', fill: '#fff', wordWrap: { width: 200 } });
+        const playerDescription = this.add.text(padding, this.scale.height / 2, playerDescriptionText, { fontSize: '14px', fill: '#fff', wordWrap: { width: 200 } });
+        const enemyDescription = this.add.text(this.scale.width - padding - 200, this.scale.height / 2, enemyDescriptionText, { fontSize: '14px', fill: '#fff', wordWrap: { width: 200 } });
 
         // Add borders around descriptions
         const playerDescriptionBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, this.player.sprite.y + 40, 200, playerDescription.height + 20);
