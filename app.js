@@ -367,7 +367,7 @@ class BattleScene extends Phaser.Scene {
         this.uiContainer = this.add.container(0, 0);
 
         // Set padding and element dimensions
-        const padding = 50;
+        const padding = this.scale.width / 20;
         const topMargin = 200;
         const elementHeight = 30;
         const actionButtonHeight = 50;
@@ -451,7 +451,7 @@ class BattleScene extends Phaser.Scene {
         const actionButtonWidth = (this.scale.width - padding * 2) / 5;
 
         actionNames.forEach((actionName, index) => {
-            const x = ((padding * 4) + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
+            const x = (padding + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
             const actionText = this.add.text(x, this.scale.height - actionButtonHeight - padding, actionName, {
                 fontSize: '30px',
                 fill: '#fff',
