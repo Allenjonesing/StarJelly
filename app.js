@@ -160,7 +160,7 @@ class BattleScene extends Phaser.Scene {
             luk: playerStats.luk,
             wis: playerStats.wis,
             sprite: null,
-            actions: ['Attack', 'Defend', 'Magic Attack', 'Skills'],
+            actions: ['Attack', 'Defend', 'Spells', 'Skills'],
             element: playerStats.element,
             statusEffects: [],
             immunities: playerStats.immunities || []
@@ -306,16 +306,16 @@ class BattleScene extends Phaser.Scene {
         if (!isPhysicalOnly) {
             for (const [element, value] of Object.entries(stats.element)) {
                 if (value <= 0) { // Strong in this element
-                    actions.magic.push(`${element.charAt(0).toUpperCase() + element.slice(1)} Magic Attack`);
+                    actions.magic.push(`${element.charAt(0).toUpperCase() + element.slice(1)} Spells`);
                 }
             }
 
             // Add more magic attacks if magAtk is high
             if (stats.magAtk > stats.atk) {
-                if (stats.element.fire <= 0) actions.magic.push('Fire Magic Attack');
-                if (stats.element.ice <= 0) actions.magic.push('Ice Magic Attack');
-                if (stats.element.lightning <= 0) actions.magic.push('Lightning Magic Attack');
-                if (stats.element.water <= 0) actions.magic.push('Water Magic Attack');
+                if (stats.element.fire <= 0) actions.magic.push('Fire Spells');
+                if (stats.element.ice <= 0) actions.magic.push('Ice Spells');
+                if (stats.element.lightning <= 0) actions.magic.push('Lightning Spells');
+                if (stats.element.water <= 0) actions.magic.push('Water Spells');
             }
 
             // Add healing spells
@@ -368,14 +368,14 @@ class BattleScene extends Phaser.Scene {
 
         // Set padding and element dimensions
         const padding = 50;
-        const topMargin = 100;
+        const topMargin = 200;
         const elementHeight = 30;
         const actionButtonHeight = 50;
         const halfWidth = this.scale.width / 2;
 
         // Help text at the very top
         this.helpText = this.add.text(padding, padding, '', {
-            fontSize: '14px',
+            fontSize: '24px',
             fill: '#fff',
             wordWrap: { width: this.scale.width - 2 * padding }
         });
@@ -383,12 +383,12 @@ class BattleScene extends Phaser.Scene {
         this.addHelpText(`A battle has begun based on the article: ${newsData[0].title}`);
 
         // Player health and mana
-        this.playerHealthText = this.add.text(padding, topMargin + elementHeight, `Health: ${this.player.health}`, { fontSize: '16px', fill: '#fff' });
-        this.playerManaText = this.add.text(padding, topMargin + elementHeight * 2, `Mana: ${this.player.mana}`, { fontSize: '16px', fill: '#fff' });
+        this.playerHealthText = this.add.text(padding, topMargin + elementHeight, `Health: ${this.player.health}`, { fontSize: '26px', fill: '#fff' });
+        this.playerManaText = this.add.text(padding, topMargin + elementHeight * 2, `Mana: ${this.player.mana}`, { fontSize: '20px', fill: '#fff' });
 
         // Enemy health and mana
-        this.enemyHealthText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight, `Health: ${this.enemy.health}`, { fontSize: '16px', fill: '#fff' });
-        this.enemyManaText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight * 2, `Mana: ${this.enemy.mana}`, { fontSize: '16px', fill: '#fff' });
+        this.enemyHealthText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight, `Health: ${this.enemy.health}`, { fontSize: '26px', fill: '#fff' });
+        this.enemyManaText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight * 2, `Mana: ${this.enemy.mana}`, { fontSize: '20px', fill: '#fff' });
 
         // Add borders around health and mana areas
         const playerHealthBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, topMargin + elementHeight - 10, 200, 75);
@@ -426,12 +426,12 @@ class BattleScene extends Phaser.Scene {
         const playerDescriptionText = `${this.player.name}: ${this.player.description}`;
         const enemyDescriptionText = `${this.enemy.name}: ${this.enemy.description}`;
 
-        const playerDescription = this.add.text(padding, this.scale.height / 2, playerDescriptionText, { fontSize: '14px', fill: '#fff', wordWrap: { width: 200 } });
-        const enemyDescription = this.add.text(this.scale.width - padding - 200, this.scale.height / 2, enemyDescriptionText, { fontSize: '14px', fill: '#fff', wordWrap: { width: 200 } });
+        const playerDescription = this.add.text(padding, this.scale.height / 2, playerDescriptionText, { fontSize: '24px', fill: '#fff', wordWrap: { width: 200 } });
+        const enemyDescription = this.add.text(this.scale.width - padding - 200, this.scale.height / 2, enemyDescriptionText, { fontSize: '24px', fill: '#fff', wordWrap: { width: 200 } });
 
         // Add borders around descriptions
-        const playerDescriptionBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, this.player.sprite.y + 40, 200, playerDescription.height + 20);
-        const enemyDescriptionBox = this.add.graphics().lineStyle(2, 0xff0000).strokeRect(this.scale.width - padding - 210, this.enemy.sprite.y + 40, 200, enemyDescription.height + 20);
+        const playerDescriptionBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, this.scale.height / 2, 200, playerDescription.height + 20);
+        const enemyDescriptionBox = this.add.graphics().lineStyle(2, 0xff0000).strokeRect(this.scale.width - padding - 210, this.scale.height / 2, 200, enemyDescription.height + 20);
         this.uiContainer.add(playerDescriptionBox);
         this.uiContainer.add(enemyDescriptionBox);
 
@@ -447,13 +447,13 @@ class BattleScene extends Phaser.Scene {
 
         // Action buttons at the bottom
         this.actions = this.add.group();
-        const actionNames = ['Attack', 'Defend', 'Magic Attack', 'Skills', 'Heal'];
+        const actionNames = ['Attack', 'Defend', 'Spells', 'Skills', 'Heal'];
         const actionButtonWidth = (this.scale.width - padding * 2) / 5;
 
         actionNames.forEach((actionName, index) => {
-            const x = ((2 * padding) + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
+            const x = ((padding) + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
             const actionText = this.add.text(x, this.scale.height - actionButtonHeight - padding, actionName, {
-                fontSize: '20px',
+                fontSize: '30px',
                 fill: '#fff',
                 backgroundColor: '#000',
                 padding: { left: 20, right: 20, top: 10, bottom: 10 }
@@ -568,7 +568,7 @@ class BattleScene extends Phaser.Scene {
             let healing = 0;
             let critical = false;
 
-            if (action === 'Magic Attack' && !elementType) {
+            if (action === 'Spells' && !elementType) {
                 this.showElementSelection();
                 return;
             }
@@ -578,11 +578,11 @@ class BattleScene extends Phaser.Scene {
                 this.showDamageIndicator(this.enemy.sprite, damage, critical);
                 this.addHelpText(`Player attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
                 this.playAttackAnimation(this.player.sprite, this.enemy.sprite);
-            } else if (action === 'Magic Attack') {
+            } else if (action === 'Spells') {
                 if (this.player.mana >= 10) {
                     damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.enemy.element[elementType], this.player.luk, this.enemy.eva);
                     this.player.mana -= 10;
-                    this.addHelpText(`Player uses ${elementType} Magic Attack! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
+                    this.addHelpText(`Player uses ${elementType} Spells! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
                     this.playMagicAttackAnimation(this.player.sprite, this.enemy.sprite, elementType, damage, critical, this.enemy.element[elementType]);
                 } else {
                     this.addHelpText("Not enough mana!");
@@ -640,7 +640,7 @@ class BattleScene extends Phaser.Scene {
             const elementWidth = (this.scale.width - 100) / skills.length;
             const x = 100 + index * elementWidth; // Adjust spacing as necessary
             const skillText = this.add.text(x, skillBoxY + 25, skill, {
-                fontSize: '20px',
+                fontSize: '30px',
                 fill: '#fff',
                 backgroundColor: '#000',
                 padding: { left: 10, right: 10, top: 5, bottom: 5 }
@@ -672,7 +672,7 @@ class BattleScene extends Phaser.Scene {
     showElementSelection() {
         this.hideSubOptions(); // Hide any existing sub-options
 
-        const elements = ['fire', 'ice', 'water', 'lightning'];
+        const elements = ['Fire', 'Ice', 'Water', 'Lightning'];
         this.elementButtons = this.add.group();
 
         // Create a new action box for elements above the original action box
@@ -685,14 +685,14 @@ class BattleScene extends Phaser.Scene {
             const elementWidth = (this.scale.width - 100) / elements.length;
             const x = 100 + index * elementWidth; // Adjust spacing as necessary
             const elementText = this.add.text(x, elementBoxY + 25, element, {
-                fontSize: '20px',
+                fontSize: '30px',
                 fill: '#fff',
                 backgroundColor: '#000',
                 padding: { left: 10, right: 10, top: 5, bottom: 5 }
             }).setOrigin(0.5);
             elementText.setInteractive();
             elementText.on('pointerdown', () => {
-                this.handlePlayerAction('Magic Attack', element);
+                this.handlePlayerAction('Spells', element.toLowerCase());
                 this.elementButtons.clear(true, true);
                 this.elementBox.destroy();
             });
@@ -777,7 +777,7 @@ class BattleScene extends Phaser.Scene {
                             action = 'Attack';
                         } else {
                             actionType = 'magic';
-                            action = `${bestElement.charAt(0).toUpperCase() + bestElement.slice(1)} Magic Attack`;
+                            action = `${bestElement.charAt(0).toUpperCase() + bestElement.slice(1)} Spells`;
                         }
                     } else if (untriedElement) {
                         if (untriedElement === 'physical') {
@@ -785,7 +785,7 @@ class BattleScene extends Phaser.Scene {
                             action = 'Attack';
                         } else {
                             actionType = 'magic';
-                            action = `${untriedElement.charAt(0).toUpperCase() + untriedElement.slice(1)} Magic Attack`;
+                            action = `${untriedElement.charAt(0).toUpperCase() + untriedElement.slice(1)} Spells`;
                         }
                     }
 
@@ -804,7 +804,7 @@ class BattleScene extends Phaser.Scene {
                         if (this.enemy.mana >= 10) {
                             damage = this.calculateMagicDamage(this.enemy.magAtk, this.player.magDef, this.player.element[elementType], this.enemy.luk);
                             this.enemy.mana -= 10;
-                            this.addHelpText(`Enemy uses ${elementType.charAt(0).toUpperCase() + elementType.slice(1)} Magic Attack! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
+                            this.addHelpText(`Enemy uses ${elementType.charAt(0).toUpperCase() + elementType.slice(1)} Spells! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
                             this.playMagicAttackAnimation(this.enemy.sprite, this.player.sprite, elementType, damage, critical, this.player.element[elementType]);
 
                             // Learn about player's elemental weaknesses
