@@ -232,7 +232,7 @@ class BattleScene extends Phaser.Scene {
 
     showLoadingIndicator() {
         this.loadingIndicator = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Loading...', {
-            fontSize: '64px',
+            fontSize: '32px',
             fill: '#fff',
             backgroundColor: '#000',
             padding: { left: 10, right: 10, top: 10, bottom: 10 }
@@ -375,7 +375,7 @@ class BattleScene extends Phaser.Scene {
 
         // Help text at the very top
         this.helpText = this.add.text(padding, padding, '', {
-            fontSize: '24px',
+            fontSize: '16px',
             fill: '#fff',
             wordWrap: { width: this.scale.width - 2 * padding }
         });
@@ -383,12 +383,12 @@ class BattleScene extends Phaser.Scene {
         this.addHelpText(`A battle has begun based on the article: ${newsData[0].title}`);
 
         // Player health and mana
-        this.playerHealthText = this.add.text(padding, topMargin + elementHeight, `Health: ${this.player.health}`, { fontSize: '50px', fill: '#fff' });
-        this.playerManaText = this.add.text(padding, topMargin + elementHeight * 2, `Mana: ${this.player.mana}`, { fontSize: '38px', fill: '#fff' });
+        this.playerHealthText = this.add.text(padding, topMargin + elementHeight, `Health: ${this.player.health}`, { fontSize: '20px', fill: '#fff' });
+        this.playerManaText = this.add.text(padding, topMargin + elementHeight * 2, `Mana: ${this.player.mana}`, { fontSize: '18px', fill: '#fff' });
 
         // Enemy health and mana
-        this.enemyHealthText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight, `Health: ${this.enemy.health}`, { fontSize: '50px', fill: '#fff' });
-        this.enemyManaText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight * 2, `Mana: ${this.enemy.mana}`, { fontSize: '38px', fill: '#fff' });
+        this.enemyHealthText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight, `Health: ${this.enemy.health}`, { fontSize: '20px', fill: '#fff' });
+        this.enemyManaText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight * 2, `Mana: ${this.enemy.mana}`, { fontSize: '18px', fill: '#fff' });
 
         // Add borders around health and mana areas
         const playerHealthBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, topMargin + elementHeight - 10, 200, 75);
@@ -426,12 +426,12 @@ class BattleScene extends Phaser.Scene {
         const playerDescriptionText = `${this.player.name}: ${this.player.description}`;
         const enemyDescriptionText = `${this.enemy.name}: ${this.enemy.description}`;
 
-        const playerDescription = this.add.text(padding, this.scale.height / 2, playerDescriptionText, { fontSize: '40px', fill: '#fff', wordWrap: { width: 200 } });
-        const enemyDescription = this.add.text(this.scale.width - padding - 200, this.scale.height / 2, enemyDescriptionText, { fontSize: '40px', fill: '#fff', wordWrap: { width: 200 } });
+        const playerDescription = this.add.text(padding, this.scale.height / 2, playerDescriptionText, { fontSize: '20px', fill: '#fff', wordWrap: { width: 200 } });
+        const enemyDescription = this.add.text(this.scale.width - padding - 200, this.scale.height / 2, enemyDescriptionText, { fontSize: '20', fill: '#fff', wordWrap: { width: 200 } });
 
         // Add borders around descriptions
-        const playerDescriptionBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, this.scale.height / 2 - 40, 200, playerDescription.height + 20);
-        const enemyDescriptionBox = this.add.graphics().lineStyle(2, 0xff0000).strokeRect(this.scale.width - padding - 210, this.scale.height / 2 - 40, 200, enemyDescription.height + 20);
+        const playerDescriptionBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, this.player.sprite.y + 40, 200, playerDescription.height + 20);
+        const enemyDescriptionBox = this.add.graphics().lineStyle(2, 0xff0000).strokeRect(this.scale.width - padding - 210, this.enemy.sprite.y + 40, 200, enemyDescription.height + 20);
         this.uiContainer.add(playerDescriptionBox);
         this.uiContainer.add(enemyDescriptionBox);
 
@@ -439,7 +439,7 @@ class BattleScene extends Phaser.Scene {
         this.uiContainer.add(enemyDescription);
 
         // Turn order list
-        this.turnOrderText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Turns:', { fontSize: '36px', fill: '#fff' }).setOrigin(0.5);
+        this.turnOrderText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Turns:', { fontSize: '30px', fill: '#fff' }).setOrigin(0.5);
         this.updateTurnOrderDisplay();
 
         // Add elements to the UI container
@@ -448,12 +448,12 @@ class BattleScene extends Phaser.Scene {
         // Action buttons at the bottom
         this.actions = this.add.group();
         const actionNames = ['Attack', 'Defend', 'Magic Attack', 'Skills', 'Heal'];
-        const actionButtonWidth = (this.scale.width) / 5;
+        const actionButtonWidth = (this.scale.width - padding * 2) / 5;
 
         actionNames.forEach((actionName, index) => {
             const x = ((2 * padding) + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
             const actionText = this.add.text(x, this.scale.height - actionButtonHeight - padding, actionName, {
-                fontSize: '34px',
+                fontSize: '30px',
                 fill: '#fff',
                 backgroundColor: '#000',
                 padding: { left: 20, right: 20, top: 10, bottom: 10 }
@@ -519,7 +519,7 @@ class BattleScene extends Phaser.Scene {
             orderText += `${this.turnOrder[(this.currentTurnIndex + i) % this.turnOrder.length].name}\n`;
         }
 
-        this.turnOrderList = this.add.text(this.scale.width / 2, this.scale.height / 2 + 200, orderText, { fontSize: '32px', fill: '#fff' }).setOrigin(0.5);
+        this.turnOrderList = this.add.text(this.scale.width / 2, this.scale.height / 2 + 200, orderText, { fontSize: '30px', fill: '#fff' }).setOrigin(0.5);
 
         this.turnOrderList.alpha = 0;
         this.tweens.add({
@@ -685,7 +685,7 @@ class BattleScene extends Phaser.Scene {
             const elementWidth = (this.scale.width - 100) / elements.length;
             const x = 100 + index * elementWidth; // Adjust spacing as necessary
             const elementText = this.add.text(x, elementBoxY + 25, element, {
-                fontSize: '30px',
+                fontSize: '30x',
                 fill: '#fff',
                 backgroundColor: '#000',
                 padding: { left: 10, right: 10, top: 5, bottom: 5 }
