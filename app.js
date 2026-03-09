@@ -20,9 +20,11 @@ const RETURN_K     = 0.10;  // pull-back acceleration
 const REUNITE_D    = BLOB_R * 2.2; // distance to cluster to rejoin
 
 // ── Game constants ────────────────────────────────────────────────────────────
-const N_START       = 10;         // starting sub-blobs
-const WAVE_INTERVAL = 4000;       // ms between waves
-const PICKUP_INTERVAL = 9000;     // ms between bonus blob pickups
+const N_START            = 10;    // starting sub-blobs
+const PICKUP_INTERVAL    = 9000;  // ms between bonus blob pickups
+const WAVE_BONUS_BLOBS   = 3;     // slime blobs rewarded after clearing a wave
+const BETWEEN_WAVE_DELAY = 3500;  // ms of downtime between waves
+const DRAG_FORCE         = 0.015; // continuous-drag force coefficient
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C_PLAYER    = 0x00dd77;
@@ -52,13 +54,15 @@ class GameScene extends Phaser.Scene {
         this.score   = 0;
         this.wave    = 0;
         this.dead    = false;
+        this.waveActive   = false; // true while enemies are alive in the current wave
+        this.betweenWaves = false; // true during the countdown between waves
 
         // Pointer / drag tracking
-        this.ptrDown  = false;
-        this.dragging = false;
-        this.ptrT     = 0;
-        this.ptrStart = null;
-        this.ptrPrev  = null;
+        this.ptrDown    = false;
+        this.dragging   = false;
+        this.ptrT       = 0;
+        this.ptrStart   = null;
+        this.ptrCurrent = null;
 
         // Graphics layers (back → front)
         this.gSlime  = this.add.graphics().setDepth(1);
@@ -79,12 +83,8 @@ class GameScene extends Phaser.Scene {
         this.input.on('pointerup',    this._onUp,   this);
 
         // Timers
-        this.time.addEvent({
-            delay: WAVE_INTERVAL,
-            callback: this._spawnWave,
-            callbackScope: this,
-            loop: true
-        });
+        // First wave fires after a short delay; subsequent waves are triggered
+        // by _onWaveComplete once all enemies are cleared.
         this.time.delayedCall(500, this._spawnWave, [], this);
 
         this.time.addEvent({
@@ -96,8 +96,12 @@ class GameScene extends Phaser.Scene {
 
         // Re-anchor right-aligned UI on resize
         this.scale.on('resize', (gs) => {
-            if (this.txtWave) this.txtWave.setX(gs.width - 16);
-            if (this.txtHint) this.txtHint.setX(gs.width / 2).setY(gs.height - 35);
+            if (this.txtWave)         this.txtWave.setX(gs.width - 16);
+            if (this.txtHint)         this.txtHint.setX(gs.width / 2).setY(gs.height - 35);
+            if (this.txtWaveBanner)   this.txtWaveBanner.setX(gs.width / 2).setY(gs.height / 2 - 90);
+            if (this.txtWaveComplete) this.txtWaveComplete.setX(gs.width / 2).setY(gs.height / 2 - 60);
+            if (this.txtWaveReward)   this.txtWaveReward.setX(gs.width / 2).setY(gs.height / 2);
+            if (this.txtNextWave)     this.txtNextWave.setX(gs.width / 2).setY(gs.height / 2 + 60);
         });
     }
 
@@ -134,11 +138,11 @@ class GameScene extends Phaser.Scene {
 
     // ── Input ─────────────────────────────────────────────────────────────────
     _onDown(p) {
-        this.ptrDown  = true;
-        this.dragging = false;
-        this.ptrT     = this.time.now;
-        this.ptrStart = { x: p.x, y: p.y };
-        this.ptrPrev  = { x: p.x, y: p.y };
+        this.ptrDown    = true;
+        this.dragging   = false;
+        this.ptrT       = this.time.now;
+        this.ptrStart   = { x: p.x, y: p.y };
+        this.ptrCurrent = { x: p.x, y: p.y };
     }
 
     _onMove(p) {
@@ -147,14 +151,7 @@ class GameScene extends Phaser.Scene {
         if (Math.hypot(dx, dy) > 12 || this.time.now - this.ptrT > 150) {
             this.dragging = true;
         }
-        if (this.dragging && this.ptrPrev) {
-            const f = 0.38;
-            for (const b of this.blobs) {
-                b.vx += (p.x - this.ptrPrev.x) * f;
-                b.vy += (p.y - this.ptrPrev.y) * f;
-            }
-        }
-        this.ptrPrev = { x: p.x, y: p.y };
+        this.ptrCurrent = { x: p.x, y: p.y };
     }
 
     _onUp(p) {
@@ -163,8 +160,9 @@ class GameScene extends Phaser.Scene {
         if (!this.dragging && Math.hypot(dx, dy) < 15 && this.time.now - this.ptrT < 500) {
             this._shoot(p.x, p.y);
         }
-        this.ptrDown  = false;
-        this.dragging = false;
+        this.ptrDown    = false;
+        this.dragging   = false;
+        this.ptrCurrent = null;
     }
 
     // ── Shooting ──────────────────────────────────────────────────────────────
@@ -201,7 +199,18 @@ class GameScene extends Phaser.Scene {
     _spawnWave() {
         if (this.dead) return;
         this.wave++;
+        this.waveActive   = true;
+        this.betweenWaves = false;
         if (this.txtWave) this.txtWave.setText(`Wave ${this.wave}`);
+
+        // Show wave announcement banner
+        if (this.txtWaveBanner) {
+            this.txtWaveBanner.setText(`⚡ WAVE ${this.wave} ⚡`).setAlpha(1);
+            this.tweens.add({
+                targets: this.txtWaveBanner, alpha: 0,
+                delay: 1200, duration: 600, ease: 'Quad.easeIn'
+            });
+        }
 
         const W = this.scale.width, H = this.scale.height;
         const count = Math.min(2 + Math.floor(this.wave * 0.7), 8);
@@ -246,6 +255,53 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    _onWaveComplete() {
+        if (this.dead) return;
+        this.betweenWaves = true;
+
+        // Award slime bonus
+        const c = this._center();
+        for (let i = 0; i < WAVE_BONUS_BLOBS; i++) {
+            const a = Math.PI * 2 * i / WAVE_BONUS_BLOBS;
+            this.blobs.push(this._makeBlob(
+                c.x + Math.cos(a) * SPRING_REST * 1.2,
+                c.y + Math.sin(a) * SPRING_REST * 1.2
+            ));
+        }
+
+        // Show wave-complete UI
+        if (this.txtWaveComplete) {
+            this.txtWaveComplete.setText(`✦ WAVE ${this.wave} COMPLETE! ✦`).setAlpha(1);
+        }
+        if (this.txtWaveReward) {
+            this.txtWaveReward.setText(`+${WAVE_BONUS_BLOBS} SLIME BONUS!`).setAlpha(1);
+        }
+
+        // Countdown display
+        let countdown = Math.ceil(BETWEEN_WAVE_DELAY / 1000);
+        if (this.txtNextWave) {
+            this.txtNextWave.setText(`Next wave in ${countdown}…`).setAlpha(1);
+        }
+        this.time.addEvent({
+            delay: 1000, repeat: countdown - 1,
+            callback: () => {
+                countdown--;
+                if (this.txtNextWave && countdown > 0) {
+                    this.txtNextWave.setText(`Next wave in ${countdown}…`);
+                }
+            }
+        });
+
+        // Trigger next wave after delay
+        this.time.delayedCall(BETWEEN_WAVE_DELAY, () => {
+            if (this.txtWaveComplete) this.txtWaveComplete.setAlpha(0);
+            if (this.txtWaveReward)   this.txtWaveReward.setAlpha(0);
+            if (this.txtNextWave)     this.txtNextWave.setAlpha(0);
+            this.betweenWaves = false;
+            this._spawnWave();
+        });
+    }
+
     // ── Main loop ─────────────────────────────────────────────────────────────
     update(time, delta) {
         if (this.dead) return;
@@ -260,6 +316,12 @@ class GameScene extends Phaser.Scene {
         this._collideEnemyBlobs();
         this._collidePickups();
         this._reuniteProjs();
+
+        // Trigger wave-complete when all enemies are cleared
+        if (this.waveActive && this.enemies.length === 0) {
+            this.waveActive = false;
+            this._onWaveComplete();
+        }
 
         this._draw(time);
         this._updateUI();
@@ -315,6 +377,20 @@ class GameScene extends Phaser.Scene {
             if (b.y > H - b.radius) { b.y = H - b.radius; b.vy = -Math.abs(b.vy) * 0.4; }
 
             b.phase += b.pSpeed * dt;
+        }
+
+        // Continuous drag: while the player holds a finger/mouse down, pull the
+        // whole cluster toward the current pointer position.
+        if (this.ptrDown && this.dragging && this.ptrCurrent) {
+            const c  = this._center();
+            const dx = this.ptrCurrent.x - c.x;
+            const dy = this.ptrCurrent.y - c.y;
+            const d  = Math.hypot(dx, dy) || 0.001;
+            const f  = d * DRAG_FORCE * dt;
+            for (const b of this.blobs) {
+                b.vx += dx / d * f;
+                b.vy += dy / d * f;
+            }
         }
     }
 
@@ -574,20 +650,24 @@ class GameScene extends Phaser.Scene {
     }
 
     _drawDragHint() {
-        if (!this.ptrDown || !this.dragging || !this.ptrStart || !this.ptrPrev) return;
-        const g  = this.gFx;
-        const dx = this.ptrPrev.x - this.ptrStart.x;
-        const dy = this.ptrPrev.y - this.ptrStart.y;
+        if (!this.ptrDown || !this.dragging || !this.ptrCurrent) return;
+        const g = this.gFx;
+        const c = this._center();
+        const dx = this.ptrCurrent.x - c.x;
+        const dy = this.ptrCurrent.y - c.y;
         if (Math.hypot(dx, dy) < 5) return;
+        // Draw a line from cluster centre to pointer, showing pull direction
         g.lineStyle(2, 0x88ffcc, 0.3);
-        g.lineBetween(this.ptrStart.x, this.ptrStart.y, this.ptrPrev.x, this.ptrPrev.y);
+        g.lineBetween(c.x, c.y, this.ptrCurrent.x, this.ptrCurrent.y);
         g.fillStyle(0x88ffcc, 0.2);
-        g.fillCircle(this.ptrPrev.x, this.ptrPrev.y, 10);
+        g.fillCircle(this.ptrCurrent.x, this.ptrCurrent.y, 14);
     }
 
     // ── UI ────────────────────────────────────────────────────────────────────
     _createUI() {
-        const D = 20; // depth
+        const D  = 20;
+        const W  = this.scale.width;
+        const H  = this.scale.height;
         this.txtScore = this.add.text(16, 16, 'Score: 0', {
             fontSize: '22px', fill: '#ffffff', fontFamily: 'monospace',
             stroke: '#000000', strokeThickness: 3
@@ -598,13 +678,13 @@ class GameScene extends Phaser.Scene {
             stroke: '#000000', strokeThickness: 3
         }).setDepth(D);
 
-        this.txtWave = this.add.text(this.scale.width - 16, 16, 'Wave 0', {
+        this.txtWave = this.add.text(W - 16, 16, 'Wave 0', {
             fontSize: '22px', fill: '#ffaa00', fontFamily: 'monospace',
             stroke: '#000000', strokeThickness: 3
         }).setOrigin(1, 0).setDepth(D);
 
         this.txtHint = this.add.text(
-            this.scale.width / 2, this.scale.height - 35,
+            W / 2, H - 35,
             'DRAG to move  ·  TAP to shoot',
             { fontSize: '15px', fill: '#666688', fontFamily: 'monospace' }
         ).setOrigin(0.5).setDepth(D);
@@ -612,6 +692,28 @@ class GameScene extends Phaser.Scene {
         this.time.delayedCall(5000, () =>
             this.tweens.add({ targets: this.txtHint, alpha: 0, duration: 1500 })
         );
+
+        // Wave announcement banner (shown briefly at wave start)
+        this.txtWaveBanner = this.add.text(W / 2, H / 2 - 90, '', {
+            fontSize: '48px', fill: '#ffdd00', fontFamily: 'monospace',
+            fontStyle: 'bold', stroke: '#000', strokeThickness: 5
+        }).setOrigin(0.5).setAlpha(0).setDepth(25);
+
+        // Between-wave UI (wave complete, reward, countdown)
+        this.txtWaveComplete = this.add.text(W / 2, H / 2 - 60, '', {
+            fontSize: '36px', fill: '#00ff88', fontFamily: 'monospace',
+            fontStyle: 'bold', stroke: '#000', strokeThickness: 4
+        }).setOrigin(0.5).setAlpha(0).setDepth(25);
+
+        this.txtWaveReward = this.add.text(W / 2, H / 2, '', {
+            fontSize: '28px', fill: '#00eeff', fontFamily: 'monospace',
+            stroke: '#000', strokeThickness: 3
+        }).setOrigin(0.5).setAlpha(0).setDepth(25);
+
+        this.txtNextWave = this.add.text(W / 2, H / 2 + 60, '', {
+            fontSize: '22px', fill: '#aaaacc', fontFamily: 'monospace',
+            stroke: '#000', strokeThickness: 2
+        }).setOrigin(0.5).setAlpha(0).setDepth(25);
     }
 
     _updateUI() {
