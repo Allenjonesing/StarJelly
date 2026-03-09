@@ -4,10 +4,10 @@ html, body {
     width: 100%;
     height: 100%;
     overflow: hidden;
+    background-color: #080818;
+    touch-action: none; /* Prevent browser scroll/zoom on touch so drag works */
 }
 
-#phaser-game {
-    width: 100%;
-    height: 100%;
+canvas {
     display: block;
 }
