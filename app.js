@@ -232,7 +232,10 @@ class GameScene extends Phaser.Scene {
         const spawnInterval = Math.max(300, 1200 - (this.wave - 1) * 80);
 
         // Cancel any leftover spawn timer from a previous wave
-        if (this.enemySpawnTimer) { this.enemySpawnTimer.remove(); this.enemySpawnTimer = null; }
+        if (this.enemySpawnTimer) {
+            this.enemySpawnTimer.remove();
+            this.enemySpawnTimer = null;
+        }
 
         // Spawn first enemy immediately, then schedule the rest
         this._spawnNextEnemy();
@@ -495,7 +498,7 @@ class GameScene extends Phaser.Scene {
                         vx: dx / d * projSpd,
                         vy: dy / d * projSpd,
                         radius: 5,
-                        life  : 180   // dt-units before despawn
+                        life  : 180   // ~3 seconds at 60 fps before despawn
                     });
                     e.shootCooldown = Math.max(60, 120 - this.wave * 5);
                 }
@@ -593,20 +596,23 @@ class GameScene extends Phaser.Scene {
     }
 
     _collideEnemyProjs() {
-        const hit = new Set();
+        const hitProjs = new Set();
+        const hitBlobs = new Set();
         for (let ei = 0; ei < this.enemyProjs.length; ei++) {
             const ep = this.enemyProjs[ei];
             for (let bi = 0; bi < this.blobs.length; bi++) {
+                if (hitBlobs.has(bi)) continue;
                 const b = this.blobs[bi];
                 if (Math.hypot(ep.x - b.x, ep.y - b.y) < ep.radius + b.radius) {
-                    hit.add(ei);
-                    this.blobs.splice(bi, 1);
+                    hitProjs.add(ei);
+                    hitBlobs.add(bi);
                     this.cameras.main.shake(60, 0.004);
                     break;
                 }
             }
         }
-        this.enemyProjs = this.enemyProjs.filter((_, i) => !hit.has(i));
+        this.enemyProjs = this.enemyProjs.filter((_, i) => !hitProjs.has(i));
+        this.blobs      = this.blobs.filter((_, i) => !hitBlobs.has(i));
     }
 
     _collidePickups() {
