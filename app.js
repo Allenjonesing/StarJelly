@@ -47,15 +47,18 @@ class GameScene extends Phaser.Scene {
         this.cameras.main.setBackgroundColor('#080818');
 
         // State
-        this.blobs   = [];   // active sub-blobs (the player "body")
-        this.projs   = [];   // launched projectile blobs
-        this.enemies = [];
-        this.pickups = [];
-        this.score   = 0;
-        this.wave    = 0;
-        this.dead    = false;
+        this.blobs      = [];   // active sub-blobs (the player "body")
+        this.projs      = [];   // launched projectile blobs
+        this.enemies    = [];
+        this.enemyQueue = [];   // enemies waiting to spawn this wave
+        this.enemyProjs = [];   // projectiles fired by shooter enemies
+        this.pickups    = [];
+        this.score      = 0;
+        this.wave       = 0;
+        this.dead       = false;
         this.waveActive   = false; // true while enemies are alive in the current wave
         this.betweenWaves = false; // true during the countdown between waves
+        this.enemySpawnTimer = null;
 
         // Pointer / drag tracking
         this.ptrDown    = false;
@@ -65,11 +68,12 @@ class GameScene extends Phaser.Scene {
         this.ptrCurrent = null;
 
         // Graphics layers (back → front)
+        // Player blobs render below enemies so enemies always appear on top
         this.gSlime  = this.add.graphics().setDepth(1);
-        this.gEnemy  = this.add.graphics().setDepth(2);
-        this.gPickup = this.add.graphics().setDepth(3);
+        this.gPickup = this.add.graphics().setDepth(2);
+        this.gBlob   = this.add.graphics().setDepth(3);
         this.gProj   = this.add.graphics().setDepth(4);
-        this.gBlob   = this.add.graphics().setDepth(5);
+        this.gEnemy  = this.add.graphics().setDepth(5);
         this.gFx     = this.add.graphics().setDepth(6);
 
         // Spawn the starting cluster at the centre of the screen
@@ -212,39 +216,81 @@ class GameScene extends Phaser.Scene {
             });
         }
 
-        const W = this.scale.width, H = this.scale.height;
-        const count = Math.min(2 + Math.floor(this.wave * 0.7), 8);
-
+        // Build enemy queue: Wave 1 = 10, Wave 2 = 15, Wave 3 = 20, ...
+        const count = 10 + (this.wave - 1) * 5;
+        this.enemyQueue = [];
         for (let i = 0; i < count; i++) {
-            const side = Math.floor(Math.random() * 4);
-            const x = side === 0 ? Math.random() * W
-                    : side === 1 ? Math.random() * W
-                    : side === 2 ? -40
-                    :               W + 40;
-            const y = side === 0 ? -40
-                    : side === 1 ? H + 40
-                    : side === 2 ? Math.random() * H
-                    :               Math.random() * H;
+            const roll = Math.random();
+            // 20% fast, 20% shooter, 60% normal
+            const type = roll < 0.20 ? 'fast'
+                       : roll < 0.40 ? 'shooter'
+                       : 'normal';
+            this.enemyQueue.push(type);
+        }
 
-            const hp = 1 + Math.floor(this.wave / 4);
-            this.enemies.push({
-                x, y,
-                vx: (Math.random() - 0.5) * 1.5,
-                vy: (Math.random() - 0.5) * 1.5,
-                radius     : 10 + Math.random() * 12,
-                health     : hp,
-                maxHealth  : hp,
-                phase      : Math.random() * Math.PI * 2,
-                pSpeed     : 0.03 + Math.random() * 0.05,
-                speed      : 1.2 + this.wave * 0.08,
-                hitTimer   : 0,
-                eatCooldown: 0
+        // Later waves spawn enemies faster (min 300ms interval)
+        const spawnInterval = Math.max(300, 1200 - (this.wave - 1) * 80);
+
+        // Cancel any leftover spawn timer from a previous wave
+        if (this.enemySpawnTimer) {
+            this.enemySpawnTimer.remove();
+            this.enemySpawnTimer = null;
+        }
+
+        // Spawn first enemy immediately, then schedule the rest
+        this._spawnNextEnemy();
+        if (this.enemyQueue.length > 0) {
+            this.enemySpawnTimer = this.time.addEvent({
+                delay    : spawnInterval,
+                repeat   : this.enemyQueue.length,
+                callback : this._spawnNextEnemy,
+                callbackScope: this
             });
         }
     }
 
+    _spawnNextEnemy() {
+        if (this.dead || this.enemyQueue.length === 0) return;
+        const type = this.enemyQueue.shift();
+        const W = this.scale.width, H = this.scale.height;
+
+        const side = Math.floor(Math.random() * 4);
+        const x = side === 0 ? Math.random() * W
+                : side === 1 ? Math.random() * W
+                : side === 2 ? -40
+                :               W + 40;
+        const y = side === 0 ? -40
+                : side === 1 ? H + 40
+                : side === 2 ? Math.random() * H
+                :               Math.random() * H;
+
+        const hp = type === 'fast'    ? 1
+                 : type === 'shooter' ? 1 + Math.floor(this.wave / 3)
+                 : 1 + Math.floor(this.wave / 4);
+
+        const baseSpeed = 1.2 + this.wave * 0.08;
+
+        this.enemies.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: (Math.random() - 0.5) * 1.5,
+            radius     : type === 'fast'    ? 8 + Math.random() * 6
+                       : type === 'shooter' ? 11 + Math.random() * 8
+                       : 10 + Math.random() * 12,
+            health     : hp,
+            maxHealth  : hp,
+            phase      : Math.random() * Math.PI * 2,
+            pSpeed     : 0.03 + Math.random() * 0.05,
+            speed      : type === 'fast' ? baseSpeed * 2.2 : baseSpeed,
+            type       : type,
+            hitTimer   : 0,
+            eatCooldown: 0,
+            shootCooldown: type === 'shooter' ? 60 + Math.random() * 60 : 0
+        });
+    }
+
     _spawnPickup() {
-        if (this.dead || this.blobs.length >= N_START * 1.5) return;
+        if (this.dead) return;
         const W = this.scale.width, H = this.scale.height;
         this.pickups.push({
             x    : 80 + Math.random() * (W - 160),
@@ -314,11 +360,12 @@ class GameScene extends Phaser.Scene {
 
         this._collideProjs();
         this._collideEnemyBlobs();
+        this._collideEnemyProjs();
         this._collidePickups();
         this._reuniteProjs();
 
-        // Trigger wave-complete when all enemies are cleared
-        if (this.waveActive && this.enemies.length === 0) {
+        // Trigger wave-complete when all enemies are cleared AND none left in queue
+        if (this.waveActive && this.enemies.length === 0 && this.enemyQueue.length === 0) {
             this.waveActive = false;
             this._onWaveComplete();
         }
@@ -430,11 +477,36 @@ class GameScene extends Phaser.Scene {
         const W  = this.scale.width, H = this.scale.height;
 
         for (const e of this.enemies) {
-            // Steer toward player cluster
             const dx = c.x - e.x, dy = c.y - e.y;
             const d  = Math.hypot(dx, dy) || 0.001;
-            e.vx += dx / d * e.speed * 0.06 * dt;
-            e.vy += dy / d * e.speed * 0.06 * dt;
+
+            if (e.type === 'shooter') {
+                // Shooters keep a comfortable distance and fire projectiles
+                const prefDist = 180 + e.radius;
+                const tooClose = d < prefDist;
+                const dir = tooClose ? -1 : 1;
+                e.vx += dx / d * e.speed * 0.05 * dir * dt;
+                e.vy += dy / d * e.speed * 0.05 * dir * dt;
+
+                // Shoot at the player when cooldown expires
+                if (e.shootCooldown > 0) {
+                    e.shootCooldown -= dt;
+                } else {
+                    const projSpd = 3.5 + this.wave * 0.1;
+                    this.enemyProjs.push({
+                        x: e.x, y: e.y,
+                        vx: dx / d * projSpd,
+                        vy: dy / d * projSpd,
+                        radius: 5,
+                        life  : 180   // ~3 seconds at 60 fps before despawn
+                    });
+                    e.shootCooldown = Math.max(60, 120 - this.wave * 5);
+                }
+            } else {
+                // Normal / fast enemies charge straight at the player
+                e.vx += dx / d * e.speed * 0.06 * dt;
+                e.vy += dy / d * e.speed * 0.06 * dt;
+            }
 
             e.vx *= 0.94;  e.vy *= 0.94;
             const s = Math.hypot(e.vx, e.vy);
@@ -445,6 +517,18 @@ class GameScene extends Phaser.Scene {
             if (e.hitTimer   > 0) e.hitTimer   -= dt;
             if (e.eatCooldown > 0) e.eatCooldown -= dt;
         }
+
+        // Step enemy projectiles
+        for (const ep of this.enemyProjs) {
+            ep.x    += ep.vx * dt;
+            ep.y    += ep.vy * dt;
+            ep.life -= dt;
+        }
+        this.enemyProjs = this.enemyProjs.filter(ep =>
+            ep.life > 0 &&
+            ep.x > -60 && ep.x < W + 60 &&
+            ep.y > -60 && ep.y < H + 60
+        );
 
         // Cull enemies that wandered far off-screen
         this.enemies = this.enemies.filter(e =>
@@ -509,6 +593,26 @@ class GameScene extends Phaser.Scene {
             }
         }
         this.blobs = this.blobs.filter((_, i) => !eaten.has(i));
+    }
+
+    _collideEnemyProjs() {
+        const hitProjs = new Set();
+        const hitBlobs = new Set();
+        for (let ei = 0; ei < this.enemyProjs.length; ei++) {
+            const ep = this.enemyProjs[ei];
+            for (let bi = 0; bi < this.blobs.length; bi++) {
+                if (hitBlobs.has(bi)) continue;
+                const b = this.blobs[bi];
+                if (Math.hypot(ep.x - b.x, ep.y - b.y) < ep.radius + b.radius) {
+                    hitProjs.add(ei);
+                    hitBlobs.add(bi);
+                    this.cameras.main.shake(60, 0.004);
+                    break;
+                }
+            }
+        }
+        this.enemyProjs = this.enemyProjs.filter((_, i) => !hitProjs.has(i));
+        this.blobs      = this.blobs.filter((_, i) => !hitBlobs.has(i));
     }
 
     _collidePickups() {
@@ -609,19 +713,53 @@ class GameScene extends Phaser.Scene {
 
     _drawEnemies() {
         const g = this.gEnemy;
+
+        // Enemy projectiles (shooter type)
+        for (const ep of this.enemyProjs) {
+            g.fillStyle(0xff6600, 0.25);
+            g.fillCircle(ep.x, ep.y, ep.radius * 2.2);
+            g.fillStyle(0xff9900, 0.95);
+            g.fillCircle(ep.x, ep.y, ep.radius);
+            g.fillStyle(0xffdd88, 0.7);
+            g.fillCircle(ep.x - ep.radius * 0.3, ep.y - ep.radius * 0.3, ep.radius * 0.4);
+        }
+
         for (const e of this.enemies) {
-            const ew  = Math.sin(e.phase) * 0.09;
-            const col = e.hitTimer > 0 ? 0xffffff : C_ENEMY;
-            // Glow
-            g.fillStyle(0xff3300, 0.14);
-            g.fillCircle(e.x, e.y, e.radius * 1.6);
-            // Body
-            g.fillStyle(col, 0.9);
-            g.fillEllipse(e.x, e.y, (1 + ew) * e.radius * 2, (1 - ew) * e.radius * 2);
-            // Highlight
-            g.fillStyle(0xff8866, 0.4);
-            g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.3);
-            // Health pips
+            const ew = Math.sin(e.phase) * 0.09;
+
+            if (e.type === 'fast') {
+                // Fast enemies: bright magenta/pink, smaller, pointy-ish
+                const col = e.hitTimer > 0 ? 0xffffff : 0xff44cc;
+                g.fillStyle(0xff00ff, 0.18);
+                g.fillCircle(e.x, e.y, e.radius * 1.8);
+                g.fillStyle(col, 0.92);
+                g.fillEllipse(e.x, e.y, (1 + ew * 1.5) * e.radius * 2, (1 - ew * 1.5) * e.radius * 2);
+                g.fillStyle(0xffaaee, 0.5);
+                g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.28);
+            } else if (e.type === 'shooter') {
+                // Shooter enemies: deep orange/yellow with a crosshair dot
+                const col = e.hitTimer > 0 ? 0xffffff : 0xff8800;
+                g.fillStyle(0xff6600, 0.16);
+                g.fillCircle(e.x, e.y, e.radius * 1.7);
+                g.fillStyle(col, 0.9);
+                g.fillEllipse(e.x, e.y, (1 + ew) * e.radius * 2, (1 - ew) * e.radius * 2);
+                // Inner dot indicator
+                g.fillStyle(0xffee00, 0.85);
+                g.fillCircle(e.x, e.y, e.radius * 0.35);
+                g.fillStyle(0xffcc44, 0.5);
+                g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.28);
+            } else {
+                // Normal enemies: classic red
+                const col = e.hitTimer > 0 ? 0xffffff : C_ENEMY;
+                g.fillStyle(0xff3300, 0.14);
+                g.fillCircle(e.x, e.y, e.radius * 1.6);
+                g.fillStyle(col, 0.9);
+                g.fillEllipse(e.x, e.y, (1 + ew) * e.radius * 2, (1 - ew) * e.radius * 2);
+                g.fillStyle(0xff8866, 0.4);
+                g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.3);
+            }
+
+            // Health pips (shown for enemies with more than 1 hp)
             if (e.maxHealth > 1) {
                 for (let h = 0; h < e.maxHealth; h++) {
                     const a = (Math.PI * 2 * h / e.maxHealth) - Math.PI / 2;
