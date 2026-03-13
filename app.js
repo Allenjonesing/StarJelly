@@ -582,17 +582,25 @@ class GameScene extends Phaser.Scene {
                 const b = this.blobs[i];
                 if (Math.hypot(e.x - b.x, e.y - b.y) >= e.radius + b.radius) continue;
 
-                // Enemy eats a blob
+                // Enemy eats a blob — but takes damage in return
                 eaten.add(i);
                 e.eatCooldown = 90; // dt-units (~1.5 s at 60 fps) before it can eat again
                 const dist = Math.hypot(e.x - b.x, e.y - b.y) || 1;
                 e.vx += (e.x - b.x) / dist * 4; // bounce enemy back
                 e.vy += (e.y - b.y) / dist * 4;
                 this.cameras.main.shake(80, 0.006);
+
+                // Enemy gets hurt
+                e.health--;
+                e.hitTimer = 6;
+                if (e.health <= 0) {
+                    this.score += 50;
+                }
                 break;
             }
         }
         this.blobs = this.blobs.filter((_, i) => !eaten.has(i));
+        this.enemies = this.enemies.filter(e => e.health > 0);
     }
 
     _collideEnemyProjs() {
