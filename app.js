@@ -31,7 +31,7 @@ const C_PLAYER    = 0x00dd77;
 const C_PLAYER_HI = 0x22ff99;
 const C_PROJ      = 0xddff00;
 const C_ENEMY     = 0xdd2200;
-const C_PICKUP    = 0x00eeff;
+const C_PICKUP    = 0x00cc55;
 
 // =============================================================================
 //  GameScene
@@ -373,7 +373,7 @@ class GameScene extends Phaser.Scene {
         this._draw(time);
         this._updateUI();
 
-        if (this.blobs.length === 0 && this.projs.length === 0) {
+        if (this.blobs.length === 0) {
             this.dead = true;
             this.time.delayedCall(600, () =>
                 this.scene.start('GameOverScene', { score: this.score, wave: this.wave })
@@ -450,8 +450,8 @@ class GameScene extends Phaser.Scene {
             p.trail.unshift({ x: p.x, y: p.y });
             if (p.trail.length > 10) p.trail.pop();
 
-            // Pull back after delay
-            if (now - p.t0 > RETURN_AFTER) {
+            // Pull back after delay, or immediately if forceReturn is set
+            if (now - p.t0 > RETURN_AFTER || p.forceReturn) {
                 const dx = c.x - p.x, dy = c.y - p.y;
                 const d  = Math.hypot(dx, dy) || 0.001;
                 p.vx += dx / d * RETURN_K * dt;
@@ -564,8 +564,8 @@ class GameScene extends Phaser.Scene {
                 p.vy -= 1.5 * dot * ny;
 
                 if (e.health <= 0) {
-                    // Killed enemy → return projectile immediately
-                    p.reunite = true;
+                    // Killed enemy → pull the projectile back (don't teleport-reunite here)
+                    p.forceReturn = true;
                     this.score += 50;
                 }
             }
@@ -728,13 +728,13 @@ class GameScene extends Phaser.Scene {
             const ew = Math.sin(e.phase) * 0.09;
 
             if (e.type === 'fast') {
-                // Fast enemies: bright magenta/pink, smaller, pointy-ish
-                const col = e.hitTimer > 0 ? 0xffffff : 0xff44cc;
-                g.fillStyle(0xff00ff, 0.18);
+                // Fast enemies: vivid crimson/blood-red, smaller, pointy-ish
+                const col = e.hitTimer > 0 ? 0xffffff : 0xdd0033;
+                g.fillStyle(0x880011, 0.25);
                 g.fillCircle(e.x, e.y, e.radius * 1.8);
                 g.fillStyle(col, 0.92);
                 g.fillEllipse(e.x, e.y, (1 + ew * 1.5) * e.radius * 2, (1 - ew * 1.5) * e.radius * 2);
-                g.fillStyle(0xffaaee, 0.5);
+                g.fillStyle(0xff4466, 0.5);
                 g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.28);
             } else if (e.type === 'shooter') {
                 // Shooter enemies: deep orange/yellow with a crosshair dot
@@ -782,7 +782,7 @@ class GameScene extends Phaser.Scene {
             g.fillStyle(C_PICKUP, 0.75);
             g.fillCircle(pk.x, pk.y, r);
             // Highlight
-            g.fillStyle(0xaaffff, 0.6);
+            g.fillStyle(0xaaffcc, 0.6);
             g.fillCircle(pk.x - r * 0.3, pk.y - r * 0.3, r * 0.3);
         }
     }
@@ -855,7 +855,7 @@ class GameScene extends Phaser.Scene {
     }
 
     _updateUI() {
-        const total = this.blobs.length + this.projs.length;
+        const total = this.blobs.length;
         this.txtScore.setText(`Score: ${this.score}`);
         this.txtBlobs.setText(`Blobs: ${total}`);
         const pct = total / N_START;
