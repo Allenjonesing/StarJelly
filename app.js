@@ -34,6 +34,65 @@ const C_ENEMY     = 0xdd2200;
 const C_PICKUP    = 0x00cc55;
 
 // =============================================================================
+//  Accomplishment system
+// =============================================================================
+const ACCOMPLISH_KEY  = 'starjelly_accomplishments';
+const ACCOMPLISH_DEFS = [
+    { id: 'first_kill',  name: 'First Blood',    desc: 'Kill your first enemy'               },
+    { id: 'kills_50',    name: 'Slime Slayer',    desc: 'Kill 50 enemies in one game'         },
+    { id: 'kills_100',   name: 'Destroyer',       desc: 'Kill 100 enemies in one game'        },
+    { id: 'wave_5',      name: 'Wave Rider',      desc: 'Reach wave 5'                        },
+    { id: 'wave_10',     name: 'Battle Hardened', desc: 'Reach wave 10'                       },
+    { id: 'wave_20',     name: 'Legendary',       desc: 'Reach wave 20'                       },
+    { id: 'score_1000',  name: 'Point Chaser',    desc: 'Score 1,000 points in one game'      },
+    { id: 'score_5000',  name: 'High Scorer',     desc: 'Score 5,000 points in one game'      },
+    { id: 'pickups_5',   name: 'Blob Collector',  desc: 'Collect 5 pickups in one game'       },
+    { id: 'last_stand',  name: 'Last Stand',      desc: 'Clear a wave with only 1 blob left'  },
+    { id: 'untouchable', name: 'Untouchable',     desc: 'Clear a wave without losing a blob'  },
+];
+
+const Accomplishments = {
+    _data: null,
+
+    _load() {
+        if (this._data !== null) return;
+        try {
+            const raw  = localStorage.getItem(ACCOMPLISH_KEY);
+            this._data = raw ? JSON.parse(raw) : {};
+        } catch (e) {
+            console.error('StarJelly: could not load accomplishments', e);
+            this._data = {};
+        }
+    },
+
+    _save() {
+        try { localStorage.setItem(ACCOMPLISH_KEY, JSON.stringify(this._data)); } catch (e) {
+            console.error('StarJelly: could not save accomplishments', e);
+        }
+    },
+
+    isUnlocked(id) {
+        this._load();
+        return !!(this._data[id]);
+    },
+
+    /** Unlocks an accomplishment. Returns true if it was newly unlocked. */
+    unlock(id) {
+        if (!ACCOMPLISH_DEFS.some(d => d.id === id)) return false;
+        this._load();
+        if (this._data[id]) return false;
+        this._data[id] = true;
+        this._save();
+        return true;
+    },
+
+    getAll() {
+        this._load();
+        return ACCOMPLISH_DEFS.map(def => ({ ...def, unlocked: !!this._data[def.id] }));
+    }
+};
+
+// =============================================================================
 //  GameScene
 // Normalize raw Phaser delta (ms) to 60-fps time units, capped to avoid spiral of death
 function normDt(delta) { return Math.min(delta / 16.667, 3); }
@@ -59,6 +118,12 @@ class GameScene extends Phaser.Scene {
         this.waveActive   = false; // true while enemies are alive in the current wave
         this.betweenWaves = false; // true during the countdown between waves
         this.enemySpawnTimer = null;
+
+        // Accomplishment tracking (reset each game)
+        this.killCount       = 0;
+        this.pickupCount     = 0;
+        this.blobsLostInWave = 0;
+        this.newlyUnlocked   = [];
 
         // Pointer / drag tracking
         this.ptrDown    = false;
@@ -199,12 +264,35 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    // ── Accomplishment helpers ─────────────────────────────────────────────────
+    _tryUnlock(id) {
+        if (Accomplishments.unlock(id)) {
+            this.newlyUnlocked.push(id);
+        }
+    }
+
+    _checkKillAccomplishments() {
+        if (this.killCount >= 1)   this._tryUnlock('first_kill');
+        if (this.killCount >= 50)  this._tryUnlock('kills_50');
+        if (this.killCount >= 100) this._tryUnlock('kills_100');
+    }
+
+    _checkScoreAccomplishments() {
+        if (this.score >= 1000) this._tryUnlock('score_1000');
+        if (this.score >= 5000) this._tryUnlock('score_5000');
+    }
+
+    _checkPickupAccomplishments() {
+        if (this.pickupCount >= 5) this._tryUnlock('pickups_5');
+    }
+
     // ── Spawners ──────────────────────────────────────────────────────────────
     _spawnWave() {
         if (this.dead) return;
         this.wave++;
-        this.waveActive   = true;
-        this.betweenWaves = false;
+        this.waveActive      = true;
+        this.betweenWaves    = false;
+        this.blobsLostInWave = 0;   // reset per-wave blob-loss counter
         if (this.txtWave) this.txtWave.setText(`Wave ${this.wave}`);
 
         // Show wave announcement banner
@@ -305,6 +393,14 @@ class GameScene extends Phaser.Scene {
         if (this.dead) return;
         this.betweenWaves = true;
 
+        // ── Accomplishment checks ──────────────────────────────────────────────
+        if (this.blobsLostInWave === 0) this._tryUnlock('untouchable');
+        if (this.blobs.length === 1)    this._tryUnlock('last_stand');
+        if (this.wave >= 5)             this._tryUnlock('wave_5');
+        if (this.wave >= 10)            this._tryUnlock('wave_10');
+        if (this.wave >= 20)            this._tryUnlock('wave_20');
+        // ──────────────────────────────────────────────────────────────────────
+
         // Award slime bonus
         const c = this._center();
         for (let i = 0; i < WAVE_BONUS_BLOBS; i++) {
@@ -375,8 +471,13 @@ class GameScene extends Phaser.Scene {
 
         if (this.blobs.length === 0) {
             this.dead = true;
+            this._checkKillAccomplishments();
+            this._checkScoreAccomplishments();
             this.time.delayedCall(600, () =>
-                this.scene.start('GameOverScene', { score: this.score, wave: this.wave })
+                this.scene.start('GameOverScene', {
+                    score: this.score, wave: this.wave,
+                    newlyUnlocked: this.newlyUnlocked
+                })
             );
         }
     }
@@ -567,10 +668,13 @@ class GameScene extends Phaser.Scene {
                     // Killed enemy → pull the projectile back (don't teleport-reunite here)
                     p.forceReturn = true;
                     this.score += 50;
+                    this.killCount++;
                 }
             }
         }
         this.enemies = this.enemies.filter(e => e.health > 0);
+        this._checkKillAccomplishments();
+        this._checkScoreAccomplishments();
     }
 
     _collideEnemyBlobs() {
@@ -595,12 +699,16 @@ class GameScene extends Phaser.Scene {
                 e.hitTimer = 6;
                 if (e.health <= 0) {
                     this.score += 50;
+                    this.killCount++;
                 }
                 break;
             }
         }
+        this.blobsLostInWave += eaten.size;
         this.blobs = this.blobs.filter((_, i) => !eaten.has(i));
         this.enemies = this.enemies.filter(e => e.health > 0);
+        this._checkKillAccomplishments();
+        this._checkScoreAccomplishments();
     }
 
     _collideEnemyProjs() {
@@ -619,6 +727,7 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
+        this.blobsLostInWave += hitBlobs.size;
         this.enemyProjs = this.enemyProjs.filter((_, i) => !hitProjs.has(i));
         this.blobs      = this.blobs.filter((_, i) => !hitBlobs.has(i));
     }
@@ -632,11 +741,14 @@ class GameScene extends Phaser.Scene {
                     got.add(i);
                     this.blobs.push(this._makeBlob(pk.x, pk.y));
                     this.score += 25;
+                    this.pickupCount++;
                     break;
                 }
             }
         }
         this.pickups = this.pickups.filter((_, i) => !got.has(i));
+        this._checkPickupAccomplishments();
+        this._checkScoreAccomplishments();
     }
 
     _reuniteProjs() {
@@ -926,6 +1038,30 @@ class GameOverScene extends Phaser.Scene {
             duration: 700
         });
 
+        // Newly unlocked accomplishments (show up to 4; cap avoids overflow on short screens)
+        const nu = (data.newlyUnlocked || []).slice(0, 4);
+        if (nu.length > 0) {
+            this.add.text(W / 2, H / 2 + 148, '★ NEW ACCOMPLISHMENTS ★', {
+                fontSize: '15px', fill: '#ffcc33', fontFamily: 'monospace',
+                fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+            }).setOrigin(0.5);
+            let yOff = H / 2 + 170;
+            for (const id of nu) {
+                const def = ACCOMPLISH_DEFS.find(d => d.id === id);
+                if (!def) continue;
+                this.add.text(W / 2, yOff, `✦ ${def.name}  –  ${def.desc}`, {
+                    fontSize: '13px', fill: '#ffdd66', fontFamily: 'monospace',
+                    stroke: '#000', strokeThickness: 2
+                }).setOrigin(0.5);
+                yOff += 21;
+            }
+            if (data.newlyUnlocked.length > 4) {
+                this.add.text(W / 2, yOff, `+${data.newlyUnlocked.length - 4} more…`, {
+                    fontSize: '12px', fill: '#aa8833', fontFamily: 'monospace'
+                }).setOrigin(0.5);
+            }
+        }
+
         // Also allow tapping anywhere to restart (after a short guard delay)
         this.time.delayedCall(800, () => {
             this.input.on('pointerdown', () => this.scene.start('GameScene'));
@@ -992,6 +1128,38 @@ class TitleScene extends Phaser.Scene {
             'Your blob-count is your health  ·  Shoot blobs to kill enemies  ·  Collect cyan blobs to grow',
             { fontSize: '12px', fill: '#444466', fontFamily: 'monospace' }
         ).setOrigin(0.5).setDepth(10);
+
+        // ── Accomplishments panel ──────────────────────────────────────────────
+        const accs          = Accomplishments.getAll();
+        const unlockedCount = accs.filter(a => a.unlocked).length;
+        const lineH         = 19;
+        const cols          = 2;
+        const rows          = Math.ceil(accs.length / cols);
+        const panelH        = rows * lineH + 26;  // 26 = header + gap
+        // Position the panel between the START button and the footer
+        const panelTop      = Math.max(H / 2 + 148, H - 44 - panelH);
+
+        this.add.text(W / 2, panelTop, `── ACCOMPLISHMENTS  ${unlockedCount} / ${accs.length} ──`, {
+            fontSize: '13px', fill: '#445566', fontFamily: 'monospace',
+            stroke: '#000', strokeThickness: 1
+        }).setOrigin(0.5).setDepth(10);
+
+        const colW   = Math.min(220, W / 2 - 12);
+        const startY = panelTop + 22;
+        for (let i = 0; i < accs.length; i++) {
+            const acc   = accs[i];
+            const col   = i % cols;
+            const row   = Math.floor(i / cols);
+            const x     = W / 2 + (col === 0 ? -colW / 2 : colW / 2);
+            const y     = startY + row * lineH;
+            const color = acc.unlocked ? '#ccaa33' : '#2a3c4e';
+            const label = acc.unlocked ? `✦ ${acc.name}` : `· ???`;
+            this.add.text(x, y, label, {
+                fontSize: '12px', fill: color, fontFamily: 'monospace',
+                stroke: '#000', strokeThickness: 1
+            }).setOrigin(0.5).setDepth(10);
+        }
+        // ──────────────────────────────────────────────────────────────────────
 
         // Animate background blobs each frame
         this.events.on('update', (time, delta) => {
