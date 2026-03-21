@@ -26,12 +26,18 @@ const WAVE_BONUS_BLOBS   = 3;     // slime blobs rewarded after clearing a wave
 const BETWEEN_WAVE_DELAY = 3500;  // ms of downtime between waves
 const DRAG_FORCE         = 0.015; // continuous-drag force coefficient
 
+// ── Power-up constants ────────────────────────────────────────────────────────
+const POWERUP_INTERVAL   = 18000; // ms between power-up spawns
+const POWERUP_DURATION   = 6000;  // ms the speed boost lasts
+const POWERUP_SPEED_MULT = 2.0;   // speed multiplier during boost
+
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C_PLAYER    = 0x00dd77;
 const C_PLAYER_HI = 0x22ff99;
-const C_PROJ      = 0xddff00;
+const C_PROJ      = 0x00ee55;  // green (was yellow 0xddff00)
 const C_ENEMY     = 0xdd2200;
 const C_PICKUP    = 0x00cc55;
+const C_POWERUP   = 0xcc44ff;  // purple for power-up pickups
 
 // =============================================================================
 //  Accomplishment system
@@ -112,12 +118,14 @@ class GameScene extends Phaser.Scene {
         this.enemyQueue = [];   // enemies waiting to spawn this wave
         this.enemyProjs = [];   // projectiles fired by shooter enemies
         this.pickups    = [];
+        this.powerups   = [];   // power-up pickup items
         this.score      = 0;
         this.wave       = 0;
         this.dead       = false;
-        this.waveActive   = false; // true while enemies are alive in the current wave
-        this.betweenWaves = false; // true during the countdown between waves
+        this.waveActive      = false; // true while enemies are alive in the current wave
+        this.betweenWaves    = false; // true during the countdown between waves
         this.enemySpawnTimer = null;
+        this.speedBoostTimer = 0;     // ms remaining on speed-boost power-up
 
         // Accomplishment tracking (reset each game)
         this.killCount       = 0;
@@ -136,6 +144,7 @@ class GameScene extends Phaser.Scene {
         // Player blobs render below enemies so enemies always appear on top
         this.gSlime  = this.add.graphics().setDepth(1);
         this.gPickup = this.add.graphics().setDepth(2);
+        this.gPowerup = this.add.graphics().setDepth(2);
         this.gBlob   = this.add.graphics().setDepth(3);
         this.gProj   = this.add.graphics().setDepth(4);
         this.gEnemy  = this.add.graphics().setDepth(5);
@@ -159,6 +168,13 @@ class GameScene extends Phaser.Scene {
         this.time.addEvent({
             delay: PICKUP_INTERVAL,
             callback: this._spawnPickup,
+            callbackScope: this,
+            loop: true
+        });
+
+        this.time.addEvent({
+            delay: POWERUP_INTERVAL,
+            callback: this._spawnPowerup,
             callbackScope: this,
             loop: true
         });
@@ -380,12 +396,29 @@ class GameScene extends Phaser.Scene {
     _spawnPickup() {
         if (this.dead) return;
         const W = this.scale.width, H = this.scale.height;
+        // Pickup grows with the wave — more blobs granted and bigger visual
+        const blobCount = Math.max(1, this.wave);
+        const radius    = BLOB_R * (0.75 + 0.15 * Math.min(blobCount - 1, 4));
         this.pickups.push({
-            x    : 80 + Math.random() * (W - 160),
-            y    : 80 + Math.random() * (H - 160),
-            radius: BLOB_R * 0.75,
+            x        : 80 + Math.random() * (W - 160),
+            y        : 80 + Math.random() * (H - 160),
+            radius,
+            pulse    : 0,
+            life     : 10000,
+            blobCount           // how many blobs to grant on collection
+        });
+    }
+
+    _spawnPowerup() {
+        if (this.dead) return;
+        const W = this.scale.width, H = this.scale.height;
+        this.powerups.push({
+            x     : 80 + Math.random() * (W - 160),
+            y     : 80 + Math.random() * (H - 160),
+            radius: BLOB_R * 1.0,
             pulse : 0,
-            life  : 10000
+            life  : 12000,
+            type  : 'speed'
         });
     }
 
@@ -458,6 +491,7 @@ class GameScene extends Phaser.Scene {
         this._collideEnemyBlobs();
         this._collideEnemyProjs();
         this._collidePickups();
+        this._collidePowerups();
         this._reuniteProjs();
 
         // Trigger wave-complete when all enemies are cleared AND none left in queue
@@ -509,11 +543,15 @@ class GameScene extends Phaser.Scene {
         }
 
         const W = this.scale.width, H = this.scale.height;
+        const boosted   = this.speedBoostTimer > 0;
+        const maxSpd    = MAX_SPD * (boosted ? POWERUP_SPEED_MULT : 1);
+        const friction  = boosted ? 0.91 : FRICTION;
+        const dragForce = DRAG_FORCE * (boosted ? POWERUP_SPEED_MULT : 1);
         for (const b of this.blobs) {
             // Dampen and cap speed
-            b.vx *= FRICTION;  b.vy *= FRICTION;
+            b.vx *= friction;  b.vy *= friction;
             const s = Math.hypot(b.vx, b.vy);
-            if (s > MAX_SPD) { b.vx *= MAX_SPD / s; b.vy *= MAX_SPD / s; }
+            if (s > maxSpd) { b.vx *= maxSpd / s; b.vy *= maxSpd / s; }
 
             // Move
             b.x += b.vx * dt;  b.y += b.vy * dt;
@@ -534,7 +572,7 @@ class GameScene extends Phaser.Scene {
             const dx = this.ptrCurrent.x - c.x;
             const dy = this.ptrCurrent.y - c.y;
             const d  = Math.hypot(dx, dy) || 0.001;
-            const f  = d * DRAG_FORCE * dt;
+            const f  = d * dragForce * dt;
             for (const b of this.blobs) {
                 b.vx += dx / d * f;
                 b.vy += dy / d * f;
@@ -643,6 +681,18 @@ class GameScene extends Phaser.Scene {
             pk.life  -= dt * 16.667;
         }
         this.pickups = this.pickups.filter(pk => pk.life > 0);
+
+        for (const pu of this.powerups) {
+            pu.pulse += 0.07 * dt;
+            pu.life  -= dt * 16.667;
+        }
+        this.powerups = this.powerups.filter(pu => pu.life > 0);
+
+        // Tick speed-boost timer
+        if (this.speedBoostTimer > 0) {
+            this.speedBoostTimer -= dt * 16.667;
+            if (this.speedBoostTimer < 0) this.speedBoostTimer = 0;
+        }
     }
 
     // ── Collisions ────────────────────────────────────────────────────────────
@@ -739,8 +789,15 @@ class GameScene extends Phaser.Scene {
             for (const b of this.blobs) {
                 if (Math.hypot(pk.x - b.x, pk.y - b.y) < pk.radius + b.radius + 22) {
                     got.add(i);
-                    this.blobs.push(this._makeBlob(pk.x, pk.y));
-                    this.score += 25;
+                    const count = pk.blobCount || 1;
+                    for (let j = 0; j < count; j++) {
+                        const a = Math.PI * 2 * j / Math.max(count, 1);
+                        this.blobs.push(this._makeBlob(
+                            pk.x + Math.cos(a) * BLOB_R,
+                            pk.y + Math.sin(a) * BLOB_R
+                        ));
+                    }
+                    this.score += 25 * count;
                     this.pickupCount++;
                     break;
                 }
@@ -749,6 +806,21 @@ class GameScene extends Phaser.Scene {
         this.pickups = this.pickups.filter((_, i) => !got.has(i));
         this._checkPickupAccomplishments();
         this._checkScoreAccomplishments();
+    }
+
+    _collidePowerups() {
+        const got = new Set();
+        for (let i = 0; i < this.powerups.length; i++) {
+            const pu = this.powerups[i];
+            for (const b of this.blobs) {
+                if (Math.hypot(pu.x - b.x, pu.y - b.y) < pu.radius + b.radius + 22) {
+                    got.add(i);
+                    this.speedBoostTimer = POWERUP_DURATION;
+                    break;
+                }
+            }
+        }
+        this.powerups = this.powerups.filter((_, i) => !got.has(i));
     }
 
     _reuniteProjs() {
@@ -763,6 +835,7 @@ class GameScene extends Phaser.Scene {
         this.gSlime.clear();
         this.gEnemy.clear();
         this.gPickup.clear();
+        this.gPowerup.clear();
         this.gProj.clear();
         this.gBlob.clear();
         this.gFx.clear();
@@ -770,6 +843,7 @@ class GameScene extends Phaser.Scene {
         this._drawConnections();
         this._drawEnemies();
         this._drawPickups();
+        this._drawPowerups();
         this._drawProjs();
         this._drawBlobs();
         this._drawDragHint();
@@ -904,6 +978,48 @@ class GameScene extends Phaser.Scene {
             // Highlight
             g.fillStyle(0xaaffcc, 0.6);
             g.fillCircle(pk.x - r * 0.3, pk.y - r * 0.3, r * 0.3);
+            // Orbiting mini-blobs indicate how many blobs will be granted
+            const count = pk.blobCount || 1;
+            if (count > 1) {
+                const orbitR  = r * 1.8 + 2;
+                const miniR   = Math.max(3, BLOB_R * 0.28);
+                const shown   = Math.min(count, 8); // cap visual orbs to 8
+                for (let j = 0; j < shown; j++) {
+                    const a  = (Math.PI * 2 * j / shown) + pk.pulse * 0.5;
+                    const ox = pk.x + Math.cos(a) * orbitR;
+                    const oy = pk.y + Math.sin(a) * orbitR;
+                    g.fillStyle(C_PICKUP, 0.55);
+                    g.fillCircle(ox, oy, miniR);
+                }
+            }
+        }
+    }
+
+    _drawPowerups() {
+        const g = this.gPowerup;
+        for (const pu of this.powerups) {
+            const r    = pu.radius * (1 + 0.25 * Math.sin(pu.pulse));
+            const spin = pu.pulse * 0.8;
+            // Outer pulsing glow
+            g.fillStyle(C_POWERUP, 0.12);
+            g.fillCircle(pu.x, pu.y, r * 3.0);
+            // Mid ring
+            g.fillStyle(C_POWERUP, 0.22);
+            g.fillCircle(pu.x, pu.y, r * 2.0);
+            // Core body
+            g.fillStyle(C_POWERUP, 0.90);
+            g.fillCircle(pu.x, pu.y, r);
+            // Specular highlight
+            g.fillStyle(0xeeccff, 0.65);
+            g.fillCircle(pu.x - r * 0.3, pu.y - r * 0.3, r * 0.3);
+            // Spinning star points (4 small dots)
+            for (let j = 0; j < 4; j++) {
+                const a  = spin + (Math.PI / 2) * j;
+                const ox = pu.x + Math.cos(a) * r * 1.55;
+                const oy = pu.y + Math.sin(a) * r * 1.55;
+                g.fillStyle(0xeeccff, 0.80);
+                g.fillCircle(ox, oy, r * 0.22);
+            }
         }
     }
 
@@ -934,6 +1050,11 @@ class GameScene extends Phaser.Scene {
         this.txtBlobs = this.add.text(16, 44, `Blobs: ${N_START}`, {
             fontSize: '22px', fill: '#00ff88', fontFamily: 'monospace',
             stroke: '#000000', strokeThickness: 3
+        }).setDepth(D);
+
+        this.txtPowerup = this.add.text(16, 72, '', {
+            fontSize: '18px', fill: '#cc44ff', fontFamily: 'monospace',
+            stroke: '#000000', strokeThickness: 2
         }).setDepth(D);
 
         this.txtWave = this.add.text(W - 16, 16, 'Wave 0', {
@@ -983,6 +1104,12 @@ class GameScene extends Phaser.Scene {
             fill: pct > 0.6 ? '#00ff88' : pct > 0.3 ? '#ffcc00' : '#ff4444'
         });
         this.txtWave.setX(this.scale.width - 16);
+        if (this.speedBoostTimer > 0) {
+            const secs = Math.ceil(this.speedBoostTimer / 1000);
+            this.txtPowerup.setText(`⚡ SPEED BOOST  ${secs}s`);
+        } else {
+            this.txtPowerup.setText('');
+        }
     }
 }
 
