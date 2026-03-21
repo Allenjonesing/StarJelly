@@ -30,6 +30,7 @@ const DRAG_FORCE         = 0.015; // continuous-drag force coefficient
 const POWERUP_INTERVAL   = 18000; // ms between power-up spawns
 const POWERUP_DURATION   = 6000;  // ms the speed boost lasts
 const POWERUP_SPEED_MULT = 2.0;   // speed multiplier during boost
+const POWERUP_FRICTION   = 0.91;  // velocity decay during boost (less damping than FRICTION=0.87)
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C_PLAYER    = 0x00dd77;
@@ -405,7 +406,7 @@ class GameScene extends Phaser.Scene {
             radius,
             pulse    : 0,
             life     : 10000,
-            blobCount           // how many blobs to grant on collection
+            blobCount,          // how many blobs to grant on collection
         });
     }
 
@@ -545,7 +546,7 @@ class GameScene extends Phaser.Scene {
         const W = this.scale.width, H = this.scale.height;
         const boosted   = this.speedBoostTimer > 0;
         const maxSpd    = MAX_SPD * (boosted ? POWERUP_SPEED_MULT : 1);
-        const friction  = boosted ? 0.91 : FRICTION;
+        const friction  = boosted ? POWERUP_FRICTION : FRICTION;
         const dragForce = DRAG_FORCE * (boosted ? POWERUP_SPEED_MULT : 1);
         for (const b of this.blobs) {
             // Dampen and cap speed
@@ -791,7 +792,7 @@ class GameScene extends Phaser.Scene {
                     got.add(i);
                     const count = pk.blobCount || 1;
                     for (let j = 0; j < count; j++) {
-                        const a = Math.PI * 2 * j / Math.max(count, 1);
+                    const a = Math.PI * 2 * j / count;
                         this.blobs.push(this._makeBlob(
                             pk.x + Math.cos(a) * BLOB_R,
                             pk.y + Math.sin(a) * BLOB_R
