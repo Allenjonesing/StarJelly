@@ -1,314 +1,61 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// StarJelly  –  2D Side-Scrolling Platformer  (Lab Escape)
-// You are an escaped blob experiment – fight your way out of the lab!
-// Controls:  Drag / A / ← / D / → to move horizontally
-//            Tap / Click to shoot 1 sub-blob toward that point
-//            Long-press a group of landed blobs to take control of them
-//            (your current blobs are left behind when you take control)
+// StarJelly  –  A jelly-blob physics game
+// Controls:  DRAG anywhere  →  slide your blob cluster
+//            TAP / CLICK    →  shoot a sub-blob in that direction
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Physics constants ────────────────────────────────────────────────────────
-const BLOB_R      = 13;           // sub-blob radius (px)
-const SPRING_REST = BLOB_R * 2.4; // spring natural length
-const K_SPRING    = 0.038;        // spring stiffness
-const K_REPEL     = 0.32;         // overlap repulsion strength
-const REPEL_D     = BLOB_R * 1.8; // repulsion kicks in below this distance
-const FRICTION    = 0.80;         // strong ground friction for tight platformer feel
-const AIR_FRICTION= 0.94;         // lighter friction while airborne
-const MAX_SPD     = 9;            // max blob speed
-const GRAVITY     = 0.92;         // heavy gravity – blobs cannot lift into the air
-const MOVE_FORCE  = 0.65;         // horizontal movement acceleration force
+const BLOB_R      = 15;          // sub-blob radius (px)
+const SPRING_REST = BLOB_R * 2.5; // spring natural length
+const K_SPRING    = 0.045;        // spring stiffness
+const K_REPEL     = 0.40;         // overlap repulsion
+const REPEL_D     = BLOB_R * 1.85;// repulsion kicks in below this dist
+const FRICTION    = 0.87;         // velocity decay per step
+const MAX_SPD     = 10;           // max sub-blob speed
 
 // ── Projectile constants ─────────────────────────────────────────────────────
-const SHOOT_V        = 16;        // minimum launch speed (close click)
-const SHOOT_V_MAX    = 32;        // maximum launch speed (distant click)
-const SHOOT_DIST_REF = 300;       // click distance (px) that reaches max launch speed
-const COLLECT_D  = BLOB_R * 3.5; // distance to auto-collect a landed blob
-const TAKE_CONTROL_RADIUS     = COLLECT_D * 4;    // world-radius for long-press take-control detection
-const TAKE_CONTROL_GROUP_RAD  = COLLECT_D * 2.5;  // radius to consider landed blobs a take-control group
-
-// ── Input constants ───────────────────────────────────────────────────────────
-const TELEPORT_HOLD_MS  = 500;  // long-press duration before teleport fires
-const DRAG_THRESHOLD    = 18;   // min screen-pixels of movement to begin a drag
+const SHOOT_V      = 15;    // launch speed
+const RETURN_AFTER = 1800;  // ms before a miss starts returning
+const RETURN_K     = 0.10;  // pull-back acceleration
+const REUNITE_D    = BLOB_R * 2.2; // distance to cluster to rejoin
 
 // ── Game constants ────────────────────────────────────────────────────────────
-const N_START    = 8;             // starting sub-blobs
+const N_START            = 10;    // starting sub-blobs
+const PICKUP_INTERVAL    = 9000;  // ms between bonus blob pickups
+const WAVE_BONUS_BLOBS   = 3;     // slime blobs rewarded after clearing a wave
+const BETWEEN_WAVE_DELAY = 3500;  // ms of downtime between waves
+const DRAG_FORCE         = 0.015; // continuous-drag force coefficient
+
+// ── Power-up constants ────────────────────────────────────────────────────────
+const POWERUP_INTERVAL   = 18000; // ms between power-up spawns
+const POWERUP_DURATION   = 6000;  // ms the speed boost lasts
+const POWERUP_SPEED_MULT = 2.0;   // speed multiplier during boost
+const POWERUP_FRICTION   = 0.91;  // velocity decay during boost (less damping than FRICTION=0.87)
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C_PLAYER    = 0x00dd77;
 const C_PLAYER_HI = 0x22ff99;
-const C_PROJ      = 0x00ee55;
-const C_PLATFORM  = 0x4a5c70;
-const C_PLAT_TOP  = 0x6a8099;
-const C_GROUND    = 0x3a4a5a;
-const C_WALL_COL  = 0x2e3d4d;
-const C_EXIT      = 0x00ff88;
-const C_VAT       = 0x22bb44;
-const C_WATER_COL = 0x2277cc;
-const C_FIRE_COL  = 0xff5500;
-const C_ENEMY_BUL = 0xff8800;
-
-// =============================================================================
-//  Level data builder  (levels are defined relative to H = screen height)
-// =============================================================================
-function buildLevels(H) {
-    const G = H - 52;  // ground surface Y
-
-    return [
-        // ── Level 1: Specimen Chamber ─────────────────────────────────────────
-        {
-            title    : 'Level 1 – Specimen Chamber',
-            worldW   : 3800,
-            worldH   : H,
-            bgColor  : '#0e1520',
-            // Solid rectangles (full collision from all sides)
-            solids   : [
-                { x:0,    y:G,   w:3800, h:H-G+4 },  // ground
-                { x:0,    y:0,   w:12,   h:H     },   // left wall
-                { x:3788, y:0,   w:12,   h:H     },   // right wall
-                { x:0,    y:0,   w:3800, h:12    },   // ceiling
-                // mid-level divider walls
-                { x:1400, y:G-170, w:14, h:170 },
-                { x:2650, y:G-145, w:14, h:145 },
-            ],
-            // One-way platforms (land on top, jump through from below)
-            platforms: [
-                { x:200,  y:G-110, w:240, h:14 },
-                { x:620,  y:G-185, w:280, h:14 },
-                { x:1030, y:G-110, w:210, h:14 },
-                { x:1330, y:G-235, w:270, h:14 },
-                { x:1680, y:G-140, w:240, h:14 },
-                { x:2000, y:G-215, w:190, h:14 },
-                // extended section
-                { x:2250, y:G-130, w:200, h:14 },
-                { x:2550, y:G-200, w:170, h:14 },
-                { x:2820, y:G-120, w:220, h:14 },
-                { x:3100, y:G-185, w:180, h:14 },
-                { x:3380, y:G-240, w:160, h:14 },
-                { x:3560, y:G-120, w:180, h:14 },
-            ],
-            playerStart: { x:70,   y:G-40 },
-            exit       : { x:3695, y:G-130, w:65, h:130 },
-            enemies    : [
-                { x:400,  y:G-20, type:'scientist', dir: 1 },
-                { x:780,  y:G-20, type:'scientist', dir:-1 },
-                { x:1180, y:G-20, type:'scientist', dir: 1 },
-                { x:1540, y:G-20, type:'scientist', dir:-1 },
-                { x:1900, y:G-20, type:'scientist', dir: 1 },
-                { x:2250, y:G-20, type:'scientist', dir:-1 },
-                // extended section enemies
-                { x:2500, y:G-20, type:'guard',     dir: 1 },
-                { x:2750, y:G-20, type:'scientist', dir:-1 },
-                { x:3000, y:G-20, type:'guard',     dir: 1 },
-                { x:3250, y:G-20, type:'scientist', dir:-1 },
-                { x:3500, y:G-20, type:'guard',     dir: 1 },
-            ],
-            vats  : [
-                { x:530,  y:G-28 },
-                { x:1090, y:G-28 },
-                { x:1820, y:G-28 },
-                { x:2450, y:G-28 },
-                { x:3150, y:G-28 },
-            ],
-            waters: [
-                { x:2080, y:G-14, w:120, h:14 },
-                { x:3310, y:G-14, w:100, h:14 },
-            ],
-            fires : [],
-        },
-
-        // ── Level 2: Research Corridor ────────────────────────────────────────
-        {
-            title    : 'Level 2 – Research Corridor',
-            worldW   : 5200,
-            worldH   : H,
-            bgColor  : '#0d1820',
-            solids   : [
-                { x:0,    y:G,   w:5200, h:H-G+4 },
-                { x:0,    y:0,   w:12,   h:H     },
-                { x:5188, y:0,   w:12,   h:H     },
-                { x:0,    y:0,   w:5200, h:12    },
-                // internal barriers / raised dividers
-                { x:1050, y:G-190, w:14, h:190 },
-                { x:2300, y:G-200, w:14, h:200 },
-                { x:3700, y:G-185, w:14, h:185 },
-            ],
-            platforms: [
-                { x:160,  y:G-125, w:250, h:14 },
-                { x:580,  y:G-225, w:290, h:14 },
-                { x:1000, y:G-130, w:200, h:14 },
-                // staircase section
-                { x:1250, y:G-140, w:90,  h:14 },
-                { x:1340, y:G-185, w:90,  h:14 },
-                { x:1430, y:G-230, w:90,  h:14 },
-                { x:1520, y:G-275, w:90,  h:14 },
-                // high run
-                { x:1720, y:G-290, w:360, h:14 },
-                { x:2220, y:G-185, w:270, h:14 },
-                { x:2650, y:G-120, w:220, h:14 },
-                { x:3000, y:G-205, w:310, h:14 },
-                { x:3380, y:G-140, w:210, h:14 },
-                // extended section
-                { x:3600, y:G-230, w:180, h:14 },
-                { x:3870, y:G-145, w:220, h:14 },
-                // second staircase
-                { x:4100, y:G-155, w:85,  h:14 },
-                { x:4185, y:G-205, w:85,  h:14 },
-                { x:4270, y:G-255, w:85,  h:14 },
-                { x:4450, y:G-270, w:280, h:14 },
-                { x:4800, y:G-160, w:200, h:14 },
-                { x:5000, y:G-120, w:160, h:14 },
-            ],
-            playerStart: { x:70,   y:G-40 },
-            exit       : { x:5105, y:G-130, w:65, h:130 },
-            enemies    : [
-                { x:300,  y:G-20, type:'scientist', dir: 1 },
-                { x:700,  y:G-20, type:'guard',     dir:-1 },
-                { x:1100, y:G-20, type:'scientist', dir: 1 },
-                { x:1500, y:G-20, type:'guard',     dir:-1 },
-                { x:1950, y:G-20, type:'scientist', dir: 1 },
-                { x:2380, y:G-20, type:'guard',     dir:-1 },
-                { x:2750, y:G-20, type:'scientist', dir: 1 },
-                { x:3100, y:G-20, type:'guard',     dir: 1 },
-                { x:3450, y:G-20, type:'scientist', dir:-1 },
-                // extended section
-                { x:3720, y:G-20, type:'guard',     dir: 1 },
-                { x:3950, y:G-20, type:'scientist', dir:-1 },
-                { x:4200, y:G-20, type:'guard',     dir: 1 },
-                { x:4500, y:G-20, type:'flamethrower', dir:-1 },
-                { x:4750, y:G-20, type:'guard',     dir: 1 },
-                { x:5000, y:G-20, type:'scientist', dir:-1 },
-            ],
-            vats  : [
-                { x:490,  y:G-28 },
-                { x:1050, y:G-28 },
-                { x:1850, y:G-28 },
-                { x:2580, y:G-28 },
-                { x:3600, y:G-28 },
-                { x:4350, y:G-28 },
-            ],
-            waters: [
-                { x:1630, y:G-14, w:140, h:14 },
-                { x:2940, y:G-14, w:110, h:14 },
-                { x:4020, y:G-14, w:130, h:14 },
-            ],
-            fires : [
-                { x:3200, y:G-18, w:70, h:18 },
-                { x:4640, y:G-18, w:80, h:18 },
-            ],
-        },
-
-        // ── Level 3: Security Wing ────────────────────────────────────────────
-        {
-            title    : 'Level 3 – Security Wing',
-            worldW   : 5800,
-            worldH   : H,
-            bgColor  : '#100d18',
-            solids   : [
-                { x:0,    y:G,   w:5800, h:H-G+4 },
-                { x:0,    y:0,   w:12,   h:H     },
-                { x:5788, y:0,   w:12,   h:H     },
-                { x:0,    y:0,   w:5800, h:12    },
-                { x:950,  y:G-155, w:14, h:155 },
-                { x:2150, y:G-175, w:14, h:175 },
-                { x:3300, y:G-160, w:14, h:160 },
-                { x:4400, y:G-180, w:14, h:180 },
-            ],
-            platforms: [
-                { x:200,  y:G-135, w:250, h:14 },
-                { x:560,  y:G-240, w:300, h:14 },
-                { x:1000, y:G-155, w:240, h:14 },
-                // staircase
-                { x:1380, y:G-150, w:85,  h:14 },
-                { x:1465, y:G-200, w:85,  h:14 },
-                { x:1550, y:G-250, w:85,  h:14 },
-                { x:1635, y:G-300, w:85,  h:14 },
-                // high section
-                { x:1840, y:G-315, w:340, h:14 },
-                { x:2350, y:G-200, w:250, h:14 },
-                { x:2720, y:G-165, w:220, h:14 },
-                { x:3100, y:G-255, w:310, h:14 },
-                { x:3520, y:G-175, w:290, h:14 },
-                { x:3880, y:G-135, w:155, h:14 },
-                // extended gauntlet section
-                { x:4100, y:G-210, w:200, h:14 },
-                { x:4380, y:G-145, w:170, h:14 },
-                // second staircase
-                { x:4580, y:G-160, w:80,  h:14 },
-                { x:4660, y:G-215, w:80,  h:14 },
-                { x:4740, y:G-270, w:80,  h:14 },
-                // final run
-                { x:4920, y:G-290, w:300, h:14 },
-                { x:5280, y:G-195, w:200, h:14 },
-                { x:5500, y:G-130, w:250, h:14 },
-            ],
-            playerStart: { x:70,   y:G-40 },
-            exit       : { x:5705, y:G-130, w:65, h:130 },
-            enemies    : [
-                { x:310,  y:G-20, type:'scientist',   dir: 1 },
-                { x:650,  y:G-20, type:'guard',       dir:-1 },
-                { x:1060, y:G-20, type:'guard',       dir: 1 },
-                { x:1380, y:G-20, type:'flamethrower',dir:-1 },
-                { x:1750, y:G-20, type:'guard',       dir: 1 },
-                { x:2050, y:G-20, type:'scientist',   dir:-1 },
-                { x:2430, y:G-20, type:'flamethrower',dir: 1 },
-                { x:2810, y:G-20, type:'guard',       dir:-1 },
-                { x:3130, y:G-20, type:'guard',       dir: 1 },
-                { x:3430, y:G-20, type:'flamethrower',dir:-1 },
-                { x:3720, y:G-20, type:'guard',       dir: 1 },
-                // extended gauntlet enemies
-                { x:3950, y:G-20, type:'flamethrower',dir:-1 },
-                { x:4200, y:G-20, type:'guard',       dir: 1 },
-                { x:4500, y:G-20, type:'flamethrower',dir:-1 },
-                { x:4780, y:G-20, type:'guard',       dir: 1 },
-                { x:5000, y:G-20, type:'flamethrower',dir:-1 },
-                { x:5200, y:G-20, type:'guard',       dir: 1 },
-                { x:5450, y:G-20, type:'flamethrower',dir:-1 },
-                { x:5650, y:G-20, type:'guard',       dir: 1 },
-            ],
-            vats  : [
-                { x:470,  y:G-28 },
-                { x:1090, y:G-28 },
-                { x:2260, y:G-28 },
-                { x:3020, y:G-28 },
-                { x:3660, y:G-28 },
-                { x:4300, y:G-28 },
-                { x:5100, y:G-28 },
-            ],
-            waters: [
-                { x:780,  y:G-14, w:120, h:14 },
-                { x:1970, y:G-14, w:100, h:14 },
-                { x:3010, y:G-14, w:90,  h:14 },
-                { x:4050, y:G-14, w:110, h:14 },
-                { x:5350, y:G-14, w:120, h:14 },
-            ],
-            fires : [
-                { x:1590, y:G-18, w:80, h:18 },
-                { x:2620, y:G-18, w:70, h:18 },
-                { x:3820, y:G-18, w:80, h:18 },
-                { x:4870, y:G-18, w:90, h:18 },
-                { x:5560, y:G-18, w:75, h:18 },
-            ],
-        },
-    ];
-}
+const C_PROJ      = 0x00ee55;  // green (was yellow 0xddff00)
+const C_ENEMY     = 0xdd2200;
+const C_PICKUP    = 0x00cc55;
+const C_POWERUP   = 0xcc44ff;  // purple for power-up pickups
 
 // =============================================================================
 //  Accomplishment system
 // =============================================================================
 const ACCOMPLISH_KEY  = 'starjelly_accomplishments';
 const ACCOMPLISH_DEFS = [
-    { id: 'first_kill',    name: 'First Blood',      desc: 'Defeat your first enemy'               },
-    { id: 'kills_10',      name: 'Slime Slayer',      desc: 'Defeat 10 enemies in one run'          },
-    { id: 'kills_25',      name: 'Blob Brawler',      desc: 'Defeat 25 enemies in one run'          },
-    { id: 'pickups_3',     name: 'Jelly Hoarder',     desc: 'Collect 3 jelly vats in one run'       },
-    { id: 'pickups_8',     name: 'Vat Collector',     desc: 'Collect 8 jelly vats in one run'       },
-    { id: 'water_3',       name: 'Waterlogged',       desc: 'Convert 3 water puddles into jelly'    },
-    { id: 'level_2',       name: 'Corridor Runner',   desc: 'Reach Level 2'                         },
-    { id: 'level_3',       name: 'Security Breach',   desc: 'Reach Level 3'                         },
-    { id: 'escaped',       name: 'Free at Last',      desc: 'Escape the lab!'                       },
-    { id: 'big_blob',      name: 'Mega Blob',         desc: 'Grow to 20 sub-blobs at once'          },
-    { id: 'untouched',     name: 'Untouchable',       desc: 'Complete a level without losing a blob'},
+    { id: 'first_kill',  name: 'First Blood',    desc: 'Kill your first enemy'               },
+    { id: 'kills_50',    name: 'Slime Slayer',    desc: 'Kill 50 enemies in one game'         },
+    { id: 'kills_100',   name: 'Destroyer',       desc: 'Kill 100 enemies in one game'        },
+    { id: 'wave_5',      name: 'Wave Rider',      desc: 'Reach wave 5'                        },
+    { id: 'wave_10',     name: 'Battle Hardened', desc: 'Reach wave 10'                       },
+    { id: 'wave_20',     name: 'Legendary',       desc: 'Reach wave 20'                       },
+    { id: 'score_1000',  name: 'Point Chaser',    desc: 'Score 1,000 points in one game'      },
+    { id: 'score_5000',  name: 'High Scorer',     desc: 'Score 5,000 points in one game'      },
+    { id: 'pickups_5',   name: 'Blob Collector',  desc: 'Collect 5 pickups in one game'       },
+    { id: 'last_stand',  name: 'Last Stand',      desc: 'Clear a wave with only 1 blob left'  },
+    { id: 'untouchable', name: 'Untouchable',     desc: 'Clear a wave without losing a blob'  },
 ];
 
 const Accomplishments = {
@@ -319,17 +66,24 @@ const Accomplishments = {
         try {
             const raw  = localStorage.getItem(ACCOMPLISH_KEY);
             this._data = raw ? JSON.parse(raw) : {};
-        } catch(e) {
+        } catch (e) {
+            console.error('StarJelly: could not load accomplishments', e);
             this._data = {};
         }
     },
 
     _save() {
-        try { localStorage.setItem(ACCOMPLISH_KEY, JSON.stringify(this._data)); } catch(e) {}
+        try { localStorage.setItem(ACCOMPLISH_KEY, JSON.stringify(this._data)); } catch (e) {
+            console.error('StarJelly: could not save accomplishments', e);
+        }
     },
 
-    isUnlocked(id) { this._load(); return !!(this._data[id]); },
+    isUnlocked(id) {
+        this._load();
+        return !!(this._data[id]);
+    },
 
+    /** Unlocks an accomplishment. Returns true if it was newly unlocked. */
     unlock(id) {
         if (!ACCOMPLISH_DEFS.some(d => d.id === id)) return false;
         this._load();
@@ -346,216 +100,112 @@ const Accomplishments = {
 };
 
 // =============================================================================
-//  Utility
-// =============================================================================
+//  GameScene
+// Normalize raw Phaser delta (ms) to 60-fps time units, capped to avoid spiral of death
 function normDt(delta) { return Math.min(delta / 16.667, 3); }
 
-// =============================================================================
-//  GameScene
 // =============================================================================
 class GameScene extends Phaser.Scene {
     constructor() { super({ key: 'GameScene' }); }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     create() {
-        this.dead          = false;
-        this.levelIdx      = 0;
-        this.score         = 0;
-        this.killCount     = 0;
-        this.vatCount      = 0;
-        this.waterCount    = 0;
-        this.newlyUnlocked = [];
-        this.blobsAtLevelStart = 0;
+        this.cameras.main.setBackgroundColor('#080818');
 
-        this.blobs      = [];   // player sub-blobs
-        this.projs      = [];   // player shot blobs (airborne)
-        this.landed     = [];   // player shot blobs that have landed
+        // State
+        this.blobs      = [];   // active sub-blobs (the player "body")
+        this.projs      = [];   // launched projectile blobs
         this.enemies    = [];
-        this.enemyProjs = [];
-        this.fireParticles = [];
-        this.vats       = [];
-        this.waters     = [];
+        this.enemyQueue = [];   // enemies waiting to spawn this wave
+        this.enemyProjs = [];   // projectiles fired by shooter enemies
+        this.pickups    = [];
+        this.powerups   = [];   // power-up pickup items
+        this.score      = 0;
+        this.wave       = 0;
+        this.dead       = false;
+        this.waveActive      = false; // true while enemies are alive in the current wave
+        this.betweenWaves    = false; // true during the countdown between waves
+        this.enemySpawnTimer = null;
+        this.speedBoostTimer = 0;     // ms remaining on speed-boost power-up
+
+        // Accomplishment tracking (reset each game)
+        this.killCount       = 0;
+        this.pickupCount     = 0;
+        this.blobsLostInWave = 0;
+        this.newlyUnlocked   = [];
+
+        // Pointer / drag tracking
+        this.ptrDown    = false;
+        this.dragging   = false;
+        this.ptrT       = 0;
+        this.ptrStart   = null;
+        this.ptrCurrent = null;
 
         // Graphics layers (back → front)
-        this.gBg      = this.add.graphics().setDepth(0);
-        this.gLevel   = this.add.graphics().setDepth(1);
-        this.gVat     = this.add.graphics().setDepth(2);
-        this.gWater   = this.add.graphics().setDepth(2);
-        this.gFire    = this.add.graphics().setDepth(3);
-        this.gSlime   = this.add.graphics().setDepth(4);
-        this.gBlob    = this.add.graphics().setDepth(5);
-        this.gProj    = this.add.graphics().setDepth(5);
-        this.gEnemy   = this.add.graphics().setDepth(6);
-        this.gFx      = this.add.graphics().setDepth(7);
+        // Player blobs render below enemies so enemies always appear on top
+        this.gSlime  = this.add.graphics().setDepth(1);
+        this.gPickup = this.add.graphics().setDepth(2);
+        this.gPowerup = this.add.graphics().setDepth(2);
+        this.gBlob   = this.add.graphics().setDepth(3);
+        this.gProj   = this.add.graphics().setDepth(4);
+        this.gEnemy  = this.add.graphics().setDepth(5);
+        this.gFx     = this.add.graphics().setDepth(6);
 
-        // Build level data using actual screen height
-        this.levelDefs = buildLevels(this.scale.height);
+        // Spawn the starting cluster at the centre of the screen
+        this._initCluster(this.scale.width / 2, this.scale.height / 2, N_START);
+
         this._createUI();
-        this._setupInput();
-        this._loadLevel(0);
-    }
 
-    // ── Level loading ─────────────────────────────────────────────────────────
-    _loadLevel(idx) {
-        this.levelIdx = idx;
-        const def     = this.levelDefs[idx];
+        // Input
+        this.input.on('pointerdown',  this._onDown, this);
+        this.input.on('pointermove',  this._onMove, this);
+        this.input.on('pointerup',    this._onUp,   this);
 
-        // Preserve blob count across levels; use N_START on first load
-        const prevBlobCount = this.blobs.length;
+        // Timers
+        // First wave fires after a short delay; subsequent waves are triggered
+        // by _onWaveComplete once all enemies are cleared.
+        this.time.delayedCall(500, this._spawnWave, [], this);
 
-        this.blobs    = [];
-        this.projs    = [];
-        this.landed   = [];
-        this.enemies  = [];
-        this.enemyProjs = [];
-        this.fireParticles = [];
-
-        // Vats and waters from level definition
-        this.vats   = def.vats.map(v => ({ ...v, radius: BLOB_R * 1.3, pulse: 0, alive: true }));
-        this.waters = def.waters.map(w => ({ ...w, alive: true }));
-
-        // Spawn player cluster (carry over blob count from previous level)
-        const ps = def.playerStart;
-        this._initCluster(ps.x, ps.y, prevBlobCount > 0 ? prevBlobCount : N_START);
-
-        // Track blob count at level start for untouched check
-        this.blobsAtLevelStart = this.blobs.length;
-
-        // Spawn enemies from definition
-        for (const e of def.enemies) {
-            this.enemies.push(this._makeEnemy(e.x, e.y, e.type, e.dir));
-        }
-
-        // Camera bounds
-        this.cameras.main.setBounds(0, 0, def.worldW, def.worldH);
-
-        // Background color
-        this.cameras.main.setBackgroundColor(def.bgColor);
-
-        if (this.txtLevel) {
-            this.txtLevel.setText(def.title);
-            this.tweens.add({ targets: this.txtLevel, alpha: 0, delay: 3000, duration: 1200 });
-        }
-    }
-
-    _makeEnemy(x, y, type, dir) {
-        const speeds  = { scientist: 1.4, guard: 2.0, flamethrower: 0.9 };
-        const healths = { scientist: 2,   guard: 3,   flamethrower: 4   };
-        return {
-            x, y,
-            vx: 0, vy: 0,
-            type,
-            dir    : dir || 1,
-            health : healths[type] || 2,
-            maxHealth: healths[type] || 2,
-            speed  : speeds[type]  || 1.5,
-            radius : type === 'flamethrower' ? 18 : type === 'guard' ? 16 : 14,
-            phase  : Math.random() * Math.PI * 2,
-            hitTimer     : 0,
-            shootCooldown: this._enemyShootCooldown(type),
-            onGround     : false,
-            patrolDir    : dir || 1,
-            patrolTimer  : 0,
-        };
-    }
-
-    _enemyShootCooldown(type) {
-        return type === 'scientist'    ? 180 + Math.random() * 60
-             : type === 'guard'        ? 120 + Math.random() * 40
-             : /* flamethrower */        80  + Math.random() * 30;
-    }
-
-    // ── Input setup ───────────────────────────────────────────────────────────
-    _setupInput() {
-        const kb = this.input.keyboard;
-        this.keys = {
-            left : kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
-            right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-            a    : kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-            d    : kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-        };
-
-        // Touch / mouse drag state
-        this._dragStart      = null;   // { x, y, worldX, worldY } screen coords at press
-        this._isDragging     = false;
-        this._dragDir        = { x: 0, y: 0 };
-        this._longPressTimer = null;
-        this._longPressPos   = null;   // world-space position being long-pressed
-        this._pressStartTime = 0;
-
-        this.input.on('pointerdown', (p) => {
-            if (this.dead) return;
-            this._dragStart      = { x: p.x, y: p.y, worldX: p.worldX, worldY: p.worldY };
-            this._isDragging     = false;
-            this._dragDir        = { x: 0, y: 0 };
-            this._longPressPos   = { x: p.worldX, y: p.worldY };
-            this._pressStartTime = this.time.now;
-
-            // Start long-press detection (500 ms hold without drag = teleport)
-            this._longPressTimer = this.time.delayedCall(TELEPORT_HOLD_MS, () => {
-                if (!this._isDragging && this._longPressPos) {
-                    this._tryTakeControl(this._longPressPos.x, this._longPressPos.y);
-                }
-                this._longPressTimer = null;
-                this._longPressPos   = null;
-            });
+        this.time.addEvent({
+            delay: PICKUP_INTERVAL,
+            callback: this._spawnPickup,
+            callbackScope: this,
+            loop: true
         });
 
-        this.input.on('pointermove', (p) => {
-            if (!this._dragStart) return;
-            const dx   = p.x - this._dragStart.x;
-            const dy   = p.y - this._dragStart.y;
-            const dist = Math.hypot(dx, dy);
-            if (dist > DRAG_THRESHOLD) {
-                if (!this._isDragging) {
-                    this._isDragging   = true;
-                    this._longPressPos = null;
-                    if (this._longPressTimer) {
-                        this._longPressTimer.remove();
-                        this._longPressTimer = null;
-                    }
-                }
-                const len          = dist || 1;
-                this._dragDir      = { x: dx / len, y: dy / len };
-            }
+        this.time.addEvent({
+            delay: POWERUP_INTERVAL,
+            callback: this._spawnPowerup,
+            callbackScope: this,
+            loop: true
         });
 
-        this.input.on('pointerup', (p) => {
-            const wasDragging = this._isDragging;
-
-            // Cancel any pending long-press
-            if (this._longPressTimer) {
-                this._longPressTimer.remove();
-                this._longPressTimer = null;
-            }
-            this._longPressPos   = null;
-            this._pressStartTime = 0;
-
-            // Short tap (not a drag) → shoot blobs
-            if (!wasDragging && this._dragStart) {
-                this._shoot(p.worldX, p.worldY);
-            }
-
-            this._dragStart  = null;
-            this._isDragging = false;
-            this._dragDir    = { x: 0, y: 0 };
+        // Re-anchor right-aligned UI on resize
+        this.scale.on('resize', (gs) => {
+            if (this.txtWave)         this.txtWave.setX(gs.width - 16);
+            if (this.txtHint)         this.txtHint.setX(gs.width / 2).setY(gs.height - 35);
+            if (this.txtWaveBanner)   this.txtWaveBanner.setX(gs.width / 2).setY(gs.height / 2 - 90);
+            if (this.txtWaveComplete) this.txtWaveComplete.setX(gs.width / 2).setY(gs.height / 2 - 60);
+            if (this.txtWaveReward)   this.txtWaveReward.setX(gs.width / 2).setY(gs.height / 2);
+            if (this.txtNextWave)     this.txtNextWave.setX(gs.width / 2).setY(gs.height / 2 + 60);
         });
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     _makeBlob(x, y, vx = 0, vy = 0) {
-        return { x, y, vx, vy, radius: BLOB_R,
-                 phase: Math.random() * Math.PI * 2,
-                 pSpeed: 0.04 + Math.random() * 0.04,
-                 onGround: false, prevY: y };
+        return {
+            x, y, vx, vy,
+            radius: BLOB_R,
+            phase : Math.random() * Math.PI * 2,
+            pSpeed: 0.04 + Math.random() * 0.04
+        };
     }
 
     _initCluster(cx, cy, n) {
-        this.blobs = [];
         for (let i = 0; i < n; i++) {
-            const a    = Math.PI * 2 * i / n;
+            const a    = (Math.PI * 2 * i / n);
             const ring = Math.floor(i / 6);
-            const r    = i === 0 ? 0 : SPRING_REST * (ring + 0.7);
+            const r    = (i === 0) ? 0 : SPRING_REST * (ring + 0.7);
             this.blobs.push(this._makeBlob(
                 cx + Math.cos(a) * r + (Math.random() - 0.5) * 4,
                 cy + Math.sin(a) * r + (Math.random() - 0.5) * 4
@@ -564,27 +214,52 @@ class GameScene extends Phaser.Scene {
     }
 
     _center() {
-        if (!this.blobs.length) return { x: this.scale.width / 2, y: this.scale.height / 2 };
+        if (!this.blobs.length) {
+            return { x: this.scale.width / 2, y: this.scale.height / 2 };
+        }
         let cx = 0, cy = 0;
         for (const b of this.blobs) { cx += b.x; cy += b.y; }
         return { x: cx / this.blobs.length, y: cy / this.blobs.length };
     }
 
-    _isGrounded() {
-        return this.blobs.some(b => b.onGround);
+    // ── Input ─────────────────────────────────────────────────────────────────
+    _onDown(p) {
+        this.ptrDown    = true;
+        this.dragging   = false;
+        this.ptrT       = this.time.now;
+        this.ptrStart   = { x: p.x, y: p.y };
+        this.ptrCurrent = { x: p.x, y: p.y };
+    }
+
+    _onMove(p) {
+        if (!this.ptrDown) return;
+        const dx = p.x - this.ptrStart.x, dy = p.y - this.ptrStart.y;
+        if (Math.hypot(dx, dy) > 12 || this.time.now - this.ptrT > 150) {
+            this.dragging = true;
+        }
+        this.ptrCurrent = { x: p.x, y: p.y };
+    }
+
+    _onUp(p) {
+        if (!this.ptrDown) return;
+        const dx = p.x - this.ptrStart.x, dy = p.y - this.ptrStart.y;
+        if (!this.dragging && Math.hypot(dx, dy) < 15 && this.time.now - this.ptrT < 500) {
+            this._shoot(p.x, p.y);
+        }
+        this.ptrDown    = false;
+        this.dragging   = false;
+        this.ptrCurrent = null;
     }
 
     // ── Shooting ──────────────────────────────────────────────────────────────
     _shoot(tx, ty) {
-        if (this.dead) return;
-        // Only shoot one blob at a time
-        if (this.blobs.length <= 2) return;
+        if (this.dead || this.blobs.length <= 1) return;
 
         const c   = this._center();
         const dx  = tx - c.x, dy = ty - c.y;
         const len = Math.hypot(dx, dy) || 1;
 
-        // Pick the blob most aligned with the shoot direction
+        // Pick the sub-blob most aligned with the target direction
         let best = null, bestDot = -Infinity;
         for (const b of this.blobs) {
             const dot = (b.x - c.x) * dx / len + (b.y - c.y) * dy / len;
@@ -593,129 +268,260 @@ class GameScene extends Phaser.Scene {
         if (!best) return;
 
         this.blobs = this.blobs.filter(b => b !== best);
-
-        const shootV = SHOOT_V + (SHOOT_V_MAX - SHOOT_V) * Math.min(len / SHOOT_DIST_REF, 1);
-        const vx = dx / len * shootV + best.vx;
-        const vy = dy / len * shootV + best.vy;
-
         this.projs.push({
-            x: best.x, y: best.y,
-            vx, vy,
-            radius: BLOB_R,
-            trail : [],
-            phase : best.phase,
-            pSpeed: best.pSpeed,
-            onGround: false,
-            landed  : false,
+            x : best.x, y : best.y,
+            vx: dx / len * SHOOT_V + best.vx,
+            vy: dy / len * SHOOT_V + best.vy,
+            radius : BLOB_R,
+            t0     : this.time.now,
+            trail  : [],
+            phase  : best.phase,
+            pSpeed : best.pSpeed,
+            reunite: false
         });
     }
 
-    // ── Take Control ─────────────────────────────────────────────────────────
-    // Long-pressing a group of landed blobs abandons the current cluster in place
-    // and gives the player control of the target group instead.
-    _tryTakeControl(wx, wy) {
-        // Find landed blobs near the pressed world position
-        const nearby = this.projs.filter(
-            p => p.landed && Math.hypot(p.x - wx, p.y - wy) < TAKE_CONTROL_RADIUS
-        );
-        if (nearby.length === 0) return;
+    // ── Accomplishment helpers ─────────────────────────────────────────────────
+    _tryUnlock(id) {
+        if (Accomplishments.unlock(id)) {
+            this.newlyUnlocked.push(id);
+        }
+    }
 
-        // Leave current blobs behind as landed projectiles (player loses them)
-        for (const b of this.blobs) {
-            this.projs.push({
-                x: b.x, y: b.y,
-                vx: 0, vy: 0,
-                radius: BLOB_R,
-                trail : [],
-                phase : b.phase,
-                pSpeed: b.pSpeed,
-                onGround: b.onGround,
-                landed  : true,
+    _checkKillAccomplishments() {
+        if (this.killCount >= 1)   this._tryUnlock('first_kill');
+        if (this.killCount >= 50)  this._tryUnlock('kills_50');
+        if (this.killCount >= 100) this._tryUnlock('kills_100');
+    }
+
+    _checkScoreAccomplishments() {
+        if (this.score >= 1000) this._tryUnlock('score_1000');
+        if (this.score >= 5000) this._tryUnlock('score_5000');
+    }
+
+    _checkPickupAccomplishments() {
+        if (this.pickupCount >= 5) this._tryUnlock('pickups_5');
+    }
+
+    // ── Spawners ──────────────────────────────────────────────────────────────
+    _spawnWave() {
+        if (this.dead) return;
+        this.wave++;
+        this.waveActive      = true;
+        this.betweenWaves    = false;
+        this.blobsLostInWave = 0;   // reset per-wave blob-loss counter
+        if (this.txtWave) this.txtWave.setText(`Wave ${this.wave}`);
+
+        // Show wave announcement banner
+        if (this.txtWaveBanner) {
+            this.txtWaveBanner.setText(`⚡ WAVE ${this.wave} ⚡`).setAlpha(1);
+            this.tweens.add({
+                targets: this.txtWaveBanner, alpha: 0,
+                delay: 1200, duration: 600, ease: 'Quad.easeIn'
             });
         }
 
-        // Take control of the nearby landed blob group
-        const nearbySet = new Set(nearby);
-        this.projs = this.projs.filter(p => !nearbySet.has(p));
-        this.blobs = nearby.map(p => this._makeBlob(p.x, p.y, 0, 0));
-
-        this.cameras.main.shake(60, 0.008);
-    }
-
-    // ── Accomplishments ────────────────────────────────────────────────────────
-    _tryUnlock(id) {
-        if (Accomplishments.unlock(id)) this.newlyUnlocked.push(id);
-    }
-
-    _checkAccomplishments() {
-        if (this.killCount >= 1)  this._tryUnlock('first_kill');
-        if (this.killCount >= 10) this._tryUnlock('kills_10');
-        if (this.killCount >= 25) this._tryUnlock('kills_25');
-        if (this.vatCount  >= 3)  this._tryUnlock('pickups_3');
-        if (this.vatCount  >= 8)  this._tryUnlock('pickups_8');
-        if (this.waterCount >= 3) this._tryUnlock('water_3');
-        if (this.blobs.length >= 20) this._tryUnlock('big_blob');
-    }
-
-    // ── Platform collision helpers ────────────────────────────────────────────
-    _resolveVsLevel(obj, level) {
-        // Returns true if the object is resting on something
-        let grounded = false;
-        const r = obj.radius;
-
-        // --- Solid rectangles (4-sided collision) ---
-        for (const s of level.solids) {
-            // Broad phase
-            if (obj.x + r < s.x || obj.x - r > s.x + s.w) continue;
-            if (obj.y + r < s.y || obj.y - r > s.y + s.h) continue;
-
-            // Find closest point on rect
-            const cx  = Math.max(s.x, Math.min(obj.x, s.x + s.w));
-            const cy  = Math.max(s.y, Math.min(obj.y, s.y + s.h));
-            const ddx = obj.x - cx, ddy = obj.y - cy;
-            const dist = Math.hypot(ddx, ddy);
-
-            if (dist === 0) {
-                // Blob centre is inside solid: push upwards
-                obj.y  = s.y - r;
-                obj.vy = Math.min(obj.vy, 0);
-                grounded = true;
-                continue;
-            }
-            if (dist >= r) continue;
-
-            const overlap = r - dist;
-            const nx = ddx / dist, ny = ddy / dist;
-            obj.x += nx * overlap;
-            obj.y += ny * overlap;
-
-            if (ny < -0.5) { obj.vy = Math.min(obj.vy, 0); grounded = true; } // floor hit
-            else if (ny > 0.5) { obj.vy = Math.max(obj.vy, 0); }              // ceiling hit
-            if (Math.abs(nx) > 0.5) { obj.vx *= -0.1; }                       // wall hit: slight bounce
+        // Build enemy queue: Wave 1 = 10, Wave 2 = 15, Wave 3 = 20, ...
+        const count = 10 + (this.wave - 1) * 5;
+        this.enemyQueue = [];
+        for (let i = 0; i < count; i++) {
+            const roll = Math.random();
+            // 20% fast, 20% shooter, 60% normal
+            const type = roll < 0.20 ? 'fast'
+                       : roll < 0.40 ? 'shooter'
+                       : 'normal';
+            this.enemyQueue.push(type);
         }
 
-        // --- One-way platforms (top-landing only) ---
-        for (const p of level.platforms) {
-            if (obj.x + r < p.x || obj.x - r > p.x + p.w) continue;
-            if (obj.vy < 0) continue;                                          // rising: skip
-            const bottom    = obj.y + r;
-            const prevBottom = (obj.prevY || obj.y) + r;
-            if (prevBottom <= p.y + 2 && bottom >= p.y) {
-                obj.y  = p.y - r;
-                obj.vy = 0;
-                grounded = true;
-            }
+        // Later waves spawn enemies faster (min 300ms interval)
+        const spawnInterval = Math.max(300, 1200 - (this.wave - 1) * 80);
+
+        // Cancel any leftover spawn timer from a previous wave
+        if (this.enemySpawnTimer) {
+            this.enemySpawnTimer.remove();
+            this.enemySpawnTimer = null;
         }
 
-        return grounded;
+        // Spawn first enemy immediately, then schedule the rest
+        this._spawnNextEnemy();
+        if (this.enemyQueue.length > 0) {
+            this.enemySpawnTimer = this.time.addEvent({
+                delay    : spawnInterval,
+                repeat   : this.enemyQueue.length,
+                callback : this._spawnNextEnemy,
+                callbackScope: this
+            });
+        }
     }
 
-    // ── Physics: blobs ────────────────────────────────────────────────────────
+    _spawnNextEnemy() {
+        if (this.dead || this.enemyQueue.length === 0) return;
+        const type = this.enemyQueue.shift();
+        const W = this.scale.width, H = this.scale.height;
+
+        const side = Math.floor(Math.random() * 4);
+        const x = side === 0 ? Math.random() * W
+                : side === 1 ? Math.random() * W
+                : side === 2 ? -40
+                :               W + 40;
+        const y = side === 0 ? -40
+                : side === 1 ? H + 40
+                : side === 2 ? Math.random() * H
+                :               Math.random() * H;
+
+        const hp = type === 'fast'    ? 1
+                 : type === 'shooter' ? 1 + Math.floor(this.wave / 3)
+                 : 1 + Math.floor(this.wave / 4);
+
+        const baseSpeed = 1.2 + this.wave * 0.08;
+
+        this.enemies.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: (Math.random() - 0.5) * 1.5,
+            radius     : type === 'fast'    ? 8 + Math.random() * 6
+                       : type === 'shooter' ? 11 + Math.random() * 8
+                       : 10 + Math.random() * 12,
+            health     : hp,
+            maxHealth  : hp,
+            phase      : Math.random() * Math.PI * 2,
+            pSpeed     : 0.03 + Math.random() * 0.05,
+            speed      : type === 'fast' ? baseSpeed * 2.2 : baseSpeed,
+            type       : type,
+            hitTimer   : 0,
+            eatCooldown: 0,
+            shootCooldown: type === 'shooter' ? 60 + Math.random() * 60 : 0
+        });
+    }
+
+    _spawnPickup() {
+        if (this.dead) return;
+        const W = this.scale.width, H = this.scale.height;
+        // Pickup grows with the wave — more blobs granted and bigger visual
+        const blobCount = Math.max(1, this.wave);
+        const radius    = BLOB_R * (0.75 + 0.15 * Math.min(blobCount - 1, 4));
+        this.pickups.push({
+            x        : 80 + Math.random() * (W - 160),
+            y        : 80 + Math.random() * (H - 160),
+            radius,
+            pulse    : 0,
+            life     : 10000,
+            blobCount,          // how many blobs to grant on collection
+        });
+    }
+
+    _spawnPowerup() {
+        if (this.dead) return;
+        const W = this.scale.width, H = this.scale.height;
+        this.powerups.push({
+            x     : 80 + Math.random() * (W - 160),
+            y     : 80 + Math.random() * (H - 160),
+            radius: BLOB_R * 1.0,
+            pulse : 0,
+            life  : 12000,
+            type  : 'speed'
+        });
+    }
+
+    _onWaveComplete() {
+        if (this.dead) return;
+        this.betweenWaves = true;
+
+        // ── Accomplishment checks ──────────────────────────────────────────────
+        if (this.blobsLostInWave === 0) this._tryUnlock('untouchable');
+        if (this.blobs.length === 1)    this._tryUnlock('last_stand');
+        if (this.wave >= 5)             this._tryUnlock('wave_5');
+        if (this.wave >= 10)            this._tryUnlock('wave_10');
+        if (this.wave >= 20)            this._tryUnlock('wave_20');
+        // ──────────────────────────────────────────────────────────────────────
+
+        // Award slime bonus
+        const c = this._center();
+        for (let i = 0; i < WAVE_BONUS_BLOBS; i++) {
+            const a = Math.PI * 2 * i / WAVE_BONUS_BLOBS;
+            this.blobs.push(this._makeBlob(
+                c.x + Math.cos(a) * SPRING_REST * 1.2,
+                c.y + Math.sin(a) * SPRING_REST * 1.2
+            ));
+        }
+
+        // Show wave-complete UI
+        if (this.txtWaveComplete) {
+            this.txtWaveComplete.setText(`✦ WAVE ${this.wave} COMPLETE! ✦`).setAlpha(1);
+        }
+        if (this.txtWaveReward) {
+            this.txtWaveReward.setText(`+${WAVE_BONUS_BLOBS} SLIME BONUS!`).setAlpha(1);
+        }
+
+        // Countdown display
+        let countdown = Math.ceil(BETWEEN_WAVE_DELAY / 1000);
+        if (this.txtNextWave) {
+            this.txtNextWave.setText(`Next wave in ${countdown}…`).setAlpha(1);
+        }
+        this.time.addEvent({
+            delay: 1000, repeat: countdown - 1,
+            callback: () => {
+                countdown--;
+                if (this.txtNextWave && countdown > 0) {
+                    this.txtNextWave.setText(`Next wave in ${countdown}…`);
+                }
+            }
+        });
+
+        // Trigger next wave after delay
+        this.time.delayedCall(BETWEEN_WAVE_DELAY, () => {
+            if (this.txtWaveComplete) this.txtWaveComplete.setAlpha(0);
+            if (this.txtWaveReward)   this.txtWaveReward.setAlpha(0);
+            if (this.txtNextWave)     this.txtNextWave.setAlpha(0);
+            this.betweenWaves = false;
+            this._spawnWave();
+        });
+    }
+
+    // ── Main loop ─────────────────────────────────────────────────────────────
+    update(time, delta) {
+        if (this.dead) return;
+        const dt = normDt(delta); // normalized to 60 fps
+
+        this._stepBlobs(dt);
+        this._stepProjs(dt, time);
+        this._stepEnemies(dt);
+        this._stepPickups(dt);
+
+        this._collideProjs();
+        this._collideEnemyBlobs();
+        this._collideEnemyProjs();
+        this._collidePickups();
+        this._collidePowerups();
+        this._reuniteProjs();
+
+        // Trigger wave-complete when all enemies are cleared AND none left in queue
+        if (this.waveActive && this.enemies.length === 0 && this.enemyQueue.length === 0) {
+            this.waveActive = false;
+            this._onWaveComplete();
+        }
+
+        this._draw(time);
+        this._updateUI();
+
+        if (this.blobs.length === 0) {
+            this.dead = true;
+            this._checkKillAccomplishments();
+            this._checkScoreAccomplishments();
+            this.time.delayedCall(600, () =>
+                this.scene.start('GameOverScene', {
+                    score: this.score, wave: this.wave,
+                    newlyUnlocked: this.newlyUnlocked
+                })
+            );
+        }
+    }
+
+    // ── Physics ───────────────────────────────────────────────────────────────
     _stepBlobs(dt) {
-        const def = this.levelDefs[this.levelIdx];
-        const n   = this.blobs.length;
+        const n = this.blobs.length;
 
-        // ─── Pairwise spring + repulsion ───
+        // Pairwise spring + repulsion
         for (let i = 0; i < n; i++) {
             for (let j = i + 1; j < n; j++) {
                 const a = this.blobs[i], b = this.blobs[j];
@@ -723,10 +529,12 @@ class GameScene extends Phaser.Scene {
                 const d  = Math.hypot(dx, dy) || 0.001;
                 const nx = dx / d, ny = dy / d;
 
+                // Attract / repel via spring
                 const spring = (d - SPRING_REST) * K_SPRING;
                 a.vx += nx * spring * dt;  a.vy += ny * spring * dt;
                 b.vx -= nx * spring * dt;  b.vy -= ny * spring * dt;
 
+                // Hard repulsion when overlapping
                 if (d < REPEL_D) {
                     const rep = (REPEL_D - d) * K_REPEL;
                     a.vx -= nx * rep * dt;  a.vy -= ny * rep * dt;
@@ -735,214 +543,228 @@ class GameScene extends Phaser.Scene {
             }
         }
 
-        // ─── Input: drag-to-slide movement ───
-        // Keyboard A/D/arrows apply horizontal force only – no upward lift.
-        const movingLeft  = this.keys.left.isDown || this.keys.a.isDown;
-        const movingRight = this.keys.right.isDown || this.keys.d.isDown;
-
+        const W = this.scale.width, H = this.scale.height;
+        const boosted   = this.speedBoostTimer > 0;
+        const maxSpd    = MAX_SPD * (boosted ? POWERUP_SPEED_MULT : 1);
+        const friction  = boosted ? POWERUP_FRICTION : FRICTION;
+        const dragForce = DRAG_FORCE * (boosted ? POWERUP_SPEED_MULT : 1);
         for (const b of this.blobs) {
-            // Gravity (heavy – blobs are weighed down and cannot fly)
-            b.vy += GRAVITY * dt;
-
-            // Horizontal keyboard input only
-            if (movingLeft)  b.vx -= MOVE_FORCE * dt;
-            if (movingRight) b.vx += MOVE_FORCE * dt;
-
-            // Touch drag input: only apply horizontal component to prevent flying
-            if (this._isDragging) {
-                b.vx += this._dragDir.x * MOVE_FORCE * dt;
-            }
-
-            // Friction
-            const fr = b.onGround ? FRICTION : AIR_FRICTION;
-            b.vx *= Math.pow(fr, dt);
-            b.vy *= 0.999;
-
-            // Speed cap
+            // Dampen and cap speed
+            b.vx *= friction;  b.vy *= friction;
             const s = Math.hypot(b.vx, b.vy);
-            if (s > MAX_SPD) { b.vx *= MAX_SPD / s; b.vy *= MAX_SPD / s; }
+            if (s > maxSpd) { b.vx *= maxSpd / s; b.vy *= maxSpd / s; }
 
-            b.prevY = b.y;
-            b.x += b.vx * dt;
-            b.y += b.vy * dt;
+            // Move
+            b.x += b.vx * dt;  b.y += b.vy * dt;
 
-            b.onGround = this._resolveVsLevel(b, def);
-            b.phase   += b.pSpeed * dt;
+            // World-bounds bounce
+            if (b.x < b.radius)     { b.x = b.radius;     b.vx =  Math.abs(b.vx) * 0.4; }
+            if (b.x > W - b.radius) { b.x = W - b.radius; b.vx = -Math.abs(b.vx) * 0.4; }
+            if (b.y < b.radius)     { b.y = b.radius;     b.vy =  Math.abs(b.vy) * 0.4; }
+            if (b.y > H - b.radius) { b.y = H - b.radius; b.vy = -Math.abs(b.vy) * 0.4; }
+
+            b.phase += b.pSpeed * dt;
+        }
+
+        // Continuous drag: while the player holds a finger/mouse down, pull the
+        // whole cluster toward the current pointer position.
+        if (this.ptrDown && this.dragging && this.ptrCurrent) {
+            const c  = this._center();
+            const dx = this.ptrCurrent.x - c.x;
+            const dy = this.ptrCurrent.y - c.y;
+            const d  = Math.hypot(dx, dy) || 0.001;
+            const f  = d * dragForce * dt;
+            for (const b of this.blobs) {
+                b.vx += dx / d * f;
+                b.vy += dy / d * f;
+            }
         }
     }
 
-    // ── Physics: projectile blobs ─────────────────────────────────────────────
-    _stepProjs(dt) {
-        const def = this.levelDefs[this.levelIdx];
+    _stepProjs(dt, now) {
+        const c  = this._center();
+        const W  = this.scale.width, H = this.scale.height;
+
         for (const p of this.projs) {
+            // Record trail
             p.trail.unshift({ x: p.x, y: p.y });
             if (p.trail.length > 10) p.trail.pop();
 
-            if (!p.landed) {
-                p.vy += GRAVITY * dt;   // gravity on projectile
-                p.vx *= 0.98;
-                p.vy *= 0.99;
-                p.prevY = p.y;
-                p.x    += p.vx * dt;
-                p.y    += p.vy * dt;
-                const g  = this._resolveVsLevel(p, def);
-                if (g) {
-                    p.vx    *= 0.2;
-                    p.vy     = 0;
-                    p.landed = true;
-                }
+            // Pull back after delay, or immediately if forceReturn is set
+            if (now - p.t0 > RETURN_AFTER || p.forceReturn) {
+                const dx = c.x - p.x, dy = c.y - p.y;
+                const d  = Math.hypot(dx, dy) || 0.001;
+                p.vx += dx / d * RETURN_K * dt;
+                p.vy += dy / d * RETURN_K * dt;
+                if (d < REUNITE_D) p.reunite = true;
             }
+
+            p.vx *= 0.98;  p.vy *= 0.98;
+            p.x  += p.vx * dt;  p.y += p.vy * dt;
+
+            // Wall bounce
+            if (p.x < p.radius)     { p.x = p.radius;     p.vx =  Math.abs(p.vx) * 0.5; }
+            if (p.x > W - p.radius) { p.x = W - p.radius; p.vx = -Math.abs(p.vx) * 0.5; }
+            if (p.y < p.radius)     { p.y = p.radius;     p.vy =  Math.abs(p.vy) * 0.5; }
+            if (p.y > H - p.radius) { p.y = H - p.radius; p.vy = -Math.abs(p.vy) * 0.5; }
+
             p.phase += p.pSpeed * dt;
         }
     }
 
-    // ── Physics: enemies ──────────────────────────────────────────────────────
     _stepEnemies(dt) {
-        const def = this.levelDefs[this.levelIdx];
-        const c   = this._center();
+        const c  = this._center();
+        const W  = this.scale.width, H = this.scale.height;
 
         for (const e of this.enemies) {
-            // Gravity
-            e.vy += GRAVITY * dt;
-            e.prevY = e.y;
-
             const dx = c.x - e.x, dy = c.y - e.y;
-            const dist = Math.hypot(dx, dy) || 1;
+            const d  = Math.hypot(dx, dy) || 0.001;
 
-            // ── Patrol / chase behaviour ──
-            if (e.type === 'flamethrower') {
-                // Slow approach when player is near
-                if (Math.abs(dx) < 350) {
-                    e.vx += (dx > 0 ? 1 : -1) * e.speed * 0.04 * dt;
-                    e.dir = dx > 0 ? 1 : -1;
+            if (e.type === 'shooter') {
+                // Shooters keep a comfortable distance and fire projectiles
+                const prefDist = 180 + e.radius;
+                const tooClose = d < prefDist;
+                const dir = tooClose ? -1 : 1;
+                e.vx += dx / d * e.speed * 0.05 * dir * dt;
+                e.vy += dy / d * e.speed * 0.05 * dir * dt;
+
+                // Shoot at the player when cooldown expires
+                if (e.shootCooldown > 0) {
+                    e.shootCooldown -= dt;
+                } else {
+                    const projSpd = 3.5 + this.wave * 0.1;
+                    this.enemyProjs.push({
+                        x: e.x, y: e.y,
+                        vx: dx / d * projSpd,
+                        vy: dy / d * projSpd,
+                        radius: 5,
+                        life  : 180   // ~3 seconds at 60 fps before despawn
+                    });
+                    e.shootCooldown = Math.max(60, 120 - this.wave * 5);
                 }
             } else {
-                // Patrol left/right on platform
-                e.patrolTimer -= dt;
-                if (e.patrolTimer <= 0) {
-                    e.patrolDir   = -e.patrolDir;
-                    e.patrolTimer = 80 + Math.random() * 80;
-                }
-                e.vx += e.patrolDir * e.speed * 0.03 * dt;
-                // Face player when in shooting range
-                if (Math.abs(dx) < 380 && Math.abs(dy) < 120) {
-                    e.dir = dx > 0 ? 1 : -1;
-                } else {
-                    e.dir = e.patrolDir;
-                }
+                // Normal / fast enemies charge straight at the player
+                e.vx += dx / d * e.speed * 0.06 * dt;
+                e.vy += dy / d * e.speed * 0.06 * dt;
             }
 
-            // Friction
-            e.vx *= 0.88;
-            e.vy *= 0.999;
+            e.vx *= 0.94;  e.vy *= 0.94;
             const s = Math.hypot(e.vx, e.vy);
-            if (s > e.speed * 2) { e.vx *= (e.speed * 2) / s; e.vy *= (e.speed * 2) / s; }
+            if (s > e.speed) { e.vx *= e.speed / s; e.vy *= e.speed / s; }
 
-            const prevVx   = e.vx;
-            e.x += e.vx * dt;
-            e.y += e.vy * dt;
-            e.onGround = this._resolveVsLevel(e, def);
-            // Reverse patrol direction if the enemy bounced off a wall
-            if (e.vx * prevVx < 0) {
-                e.patrolDir = -e.patrolDir;
-                e.patrolTimer = 60 + Math.random() * 60;
-            }
-            e.phase   += 0.04 * dt;
-            if (e.hitTimer > 0) e.hitTimer -= dt;
-
-            // ── Shooting ──
-            e.shootCooldown -= dt;
-            if (e.shootCooldown <= 0 && Math.abs(dx) < 420 && Math.abs(dy) < 140) {
-                this._enemyShoot(e, c);
-                e.shootCooldown = this._enemyShootCooldown(e.type);
-            }
+            e.x += e.vx * dt;  e.y += e.vy * dt;
+            e.phase += e.pSpeed * dt;
+            if (e.hitTimer   > 0) e.hitTimer   -= dt;
+            if (e.eatCooldown > 0) e.eatCooldown -= dt;
         }
 
         // Step enemy projectiles
         for (const ep of this.enemyProjs) {
             ep.x    += ep.vx * dt;
             ep.y    += ep.vy * dt;
-            ep.vy   += GRAVITY * 0.4 * dt; // slight arc
             ep.life -= dt;
         }
+        this.enemyProjs = this.enemyProjs.filter(ep =>
+            ep.life > 0 &&
+            ep.x > -60 && ep.x < W + 60 &&
+            ep.y > -60 && ep.y < H + 60
+        );
 
-        // Step fire particles
-        for (const fp of this.fireParticles) {
-            fp.x    += fp.vx * dt;
-            fp.y    += fp.vy * dt;
-            fp.vy   += GRAVITY * 0.15 * dt;
-            fp.life -= dt;
-            fp.alpha = fp.life / fp.maxLife;
-        }
-
-        const W = this.scale.width + 400;
-        this.enemyProjs    = this.enemyProjs.filter(ep =>
-            ep.life > 0 && ep.x > -200 && ep.x < W && ep.y > -200 && ep.y < this.scale.height + 200);
-        this.fireParticles = this.fireParticles.filter(fp => fp.life > 0);
+        // Cull enemies that wandered far off-screen
+        this.enemies = this.enemies.filter(e =>
+            e.x > -150 && e.x < W + 150 && e.y > -150 && e.y < H + 150
+        );
     }
 
-    _enemyShoot(e, target) {
-        const dx = target.x - e.x, dy = target.y - e.y;
-        const d  = Math.hypot(dx, dy) || 1;
+    _stepPickups(dt) {
+        for (const pk of this.pickups) {
+            pk.pulse += 0.05 * dt;
+            pk.life  -= dt * 16.667;
+        }
+        this.pickups = this.pickups.filter(pk => pk.life > 0);
 
-        if (e.type === 'flamethrower') {
-            // Burst of fire particles in a cone
-            for (let i = 0; i < 6; i++) {
-                const spread = (Math.random() - 0.5) * 0.6;
-                const spd    = 4 + Math.random() * 3;
-                const angle  = Math.atan2(dy, dx) + spread;
-                const life   = 40 + Math.random() * 20;
-                this.fireParticles.push({
-                    x: e.x + Math.cos(angle) * e.radius,
-                    y: e.y,
-                    vx: Math.cos(angle) * spd,
-                    vy: Math.sin(angle) * spd - 1,
-                    radius: 6 + Math.random() * 5,
-                    life, maxLife: life, alpha: 1,
-                });
-            }
-        } else {
-            const spd = e.type === 'guard' ? 5.5 : 4.0;
-            this.enemyProjs.push({
-                x: e.x + e.dir * e.radius,
-                y: e.y - 5,
-                vx: dx / d * spd,
-                vy: dy / d * spd * 0.5,  // flatter trajectory
-                radius: e.type === 'guard' ? 6 : 5,
-                life  : 150,
-                type  : e.type,
-            });
+        for (const pu of this.powerups) {
+            pu.pulse += 0.07 * dt;
+            pu.life  -= dt * 16.667;
+        }
+        this.powerups = this.powerups.filter(pu => pu.life > 0);
+
+        // Tick speed-boost timer
+        if (this.speedBoostTimer > 0) {
+            this.speedBoostTimer -= dt * 16.667;
+            if (this.speedBoostTimer < 0) this.speedBoostTimer = 0;
         }
     }
 
     // ── Collisions ────────────────────────────────────────────────────────────
     _collideProjs() {
-        // Player proj blobs vs enemies
         for (const p of this.projs) {
-            if (p.landed) continue;
+            if (p.reunite) continue;
             for (const e of this.enemies) {
-                if (Math.hypot(e.x - p.x, e.y - p.y) >= e.radius + p.radius) continue;
+                const d = Math.hypot(e.x - p.x, e.y - p.y);
+                if (d >= e.radius + p.radius) continue;
+
+                // Hit!
                 e.health--;
-                e.hitTimer = 8;
+                e.hitTimer = 6;
                 this.score += 10;
 
-                // Reflect proj
-                const nx = (e.x - p.x) / (Math.hypot(e.x - p.x, e.y - p.y) || 1);
-                const ny = (e.y - p.y) / (Math.hypot(e.x - p.x, e.y - p.y) || 1);
+                // Reflect projectile
+                const nx  = (e.x - p.x) / d, ny = (e.y - p.y) / d;
                 const dot = p.vx * nx + p.vy * ny;
-                p.vx -= 1.4 * dot * nx;
-                p.vy -= 1.4 * dot * ny;
+                p.vx -= 1.5 * dot * nx;
+                p.vy -= 1.5 * dot * ny;
 
-                if (e.health <= 0) { this.score += 50; this.killCount++; }
+                if (e.health <= 0) {
+                    // Killed enemy → pull the projectile back (don't teleport-reunite here)
+                    p.forceReturn = true;
+                    this.score += 50;
+                    this.killCount++;
+                }
             }
         }
-        const prevLen = this.enemies.length;
         this.enemies = this.enemies.filter(e => e.health > 0);
-        this._checkAccomplishments();
+        this._checkKillAccomplishments();
+        this._checkScoreAccomplishments();
+    }
+
+    _collideEnemyBlobs() {
+        const eaten = new Set();
+        for (const e of this.enemies) {
+            if (e.eatCooldown > 0) continue;
+            for (let i = 0; i < this.blobs.length; i++) {
+                if (eaten.has(i)) continue;
+                const b = this.blobs[i];
+                if (Math.hypot(e.x - b.x, e.y - b.y) >= e.radius + b.radius) continue;
+
+                // Enemy eats a blob — but takes damage in return
+                eaten.add(i);
+                e.eatCooldown = 90; // dt-units (~1.5 s at 60 fps) before it can eat again
+                const dist = Math.hypot(e.x - b.x, e.y - b.y) || 1;
+                e.vx += (e.x - b.x) / dist * 4; // bounce enemy back
+                e.vy += (e.y - b.y) / dist * 4;
+                this.cameras.main.shake(80, 0.006);
+
+                // Enemy gets hurt
+                e.health--;
+                e.hitTimer = 6;
+                if (e.health <= 0) {
+                    this.score += 50;
+                    this.killCount++;
+                }
+                break;
+            }
+        }
+        this.blobsLostInWave += eaten.size;
+        this.blobs = this.blobs.filter((_, i) => !eaten.has(i));
+        this.enemies = this.enemies.filter(e => e.health > 0);
+        this._checkKillAccomplishments();
+        this._checkScoreAccomplishments();
     }
 
     _collideEnemyProjs() {
-        const hitProjs = new Set(), hitBlobs = new Set();
+        const hitProjs = new Set();
+        const hitBlobs = new Set();
         for (let ei = 0; ei < this.enemyProjs.length; ei++) {
             const ep = this.enemyProjs[ei];
             for (let bi = 0; bi < this.blobs.length; bi++) {
@@ -951,435 +773,93 @@ class GameScene extends Phaser.Scene {
                 if (Math.hypot(ep.x - b.x, ep.y - b.y) < ep.radius + b.radius) {
                     hitProjs.add(ei);
                     hitBlobs.add(bi);
-                    this.cameras.main.shake(55, 0.005);
+                    this.cameras.main.shake(60, 0.004);
                     break;
                 }
             }
         }
+        this.blobsLostInWave += hitBlobs.size;
         this.enemyProjs = this.enemyProjs.filter((_, i) => !hitProjs.has(i));
         this.blobs      = this.blobs.filter((_, i) => !hitBlobs.has(i));
     }
 
-    _collideFireParticles() {
-        // Fire particles destroy player blobs on contact
-        const hitBlobs = new Set(), hitProjs = new Set();
-        for (const fp of this.fireParticles) {
-            for (let bi = 0; bi < this.blobs.length; bi++) {
-                if (hitBlobs.has(bi)) continue;
-                if (Math.hypot(fp.x - this.blobs[bi].x, fp.y - this.blobs[bi].y) < fp.radius + this.blobs[bi].radius) {
-                    hitBlobs.add(bi);
-                    this.cameras.main.shake(40, 0.004);
-                }
-            }
-            // Fire also destroys player projectile blobs (including landed ones)
-            for (let pi = 0; pi < this.projs.length; pi++) {
-                if (hitProjs.has(pi)) continue;
-                if (Math.hypot(fp.x - this.projs[pi].x, fp.y - this.projs[pi].y) < fp.radius + this.projs[pi].radius) {
-                    hitProjs.add(pi);
-                }
-            }
-        }
-        this.blobs = this.blobs.filter((_, i) => !hitBlobs.has(i));
-        this.projs = this.projs.filter((_, i) => !hitProjs.has(i));
-    }
-
-    _collideEnemyBlobs() {
-        // Direct contact: enemies damage player blobs on touch
-        const eaten = new Set();
-        for (const e of this.enemies) {
-            for (let i = 0; i < this.blobs.length; i++) {
-                if (eaten.has(i)) continue;
-                if (Math.hypot(e.x - this.blobs[i].x, e.y - this.blobs[i].y) < e.radius + this.blobs[i].radius) {
-                    eaten.add(i);
-                    e.health--;
-                    e.hitTimer = 8;
-                    if (e.health <= 0) { this.score += 50; this.killCount++; }
-                    this.cameras.main.shake(70, 0.007);
-                    break;
-                }
-            }
-        }
-        this.blobs   = this.blobs.filter((_, i) => !eaten.has(i));
-        this.enemies = this.enemies.filter(e => e.health > 0);
-        this._checkAccomplishments();
-    }
-
-    _collideLevelFires() {
-        // Static fire hazards from level definition (burn blobs)
-        const def    = this.levelDefs[this.levelIdx];
-        const hitSet = new Set();
-        for (const f of def.fires) {
-            for (let i = 0; i < this.blobs.length; i++) {
-                if (hitSet.has(i)) continue;
-                const b = this.blobs[i];
-                if (b.x + b.radius > f.x && b.x - b.radius < f.x + f.w && b.y + b.radius > f.y) {
-                    hitSet.add(i);
-                }
-            }
-        }
-        if (hitSet.size) this.cameras.main.shake(40, 0.004);
-        this.blobs = this.blobs.filter((_, i) => !hitSet.has(i));
-    }
-
-    // ── Collectibles ──────────────────────────────────────────────────────────
-    _collectLandedBlobs() {
-        // Collect landed blobs when the cluster gets close enough.
-        // Iterating in reverse order (high index → low) means toCollect is already
-        // in descending order, so splice() calls don't shift any remaining indices.
-        const toCollect = [];
-        for (let i = this.projs.length - 1; i >= 0; i--) {
-            const p = this.projs[i];
-            if (!p.landed) continue;
+    _collidePickups() {
+        const got = new Set();
+        for (let i = 0; i < this.pickups.length; i++) {
+            const pk = this.pickups[i];
             for (const b of this.blobs) {
-                if (Math.hypot(b.x - p.x, b.y - p.y) < COLLECT_D) {
-                    toCollect.push(i);
-                    break;
-                }
-            }
-        }
-        // toCollect is already in descending order (high → low) so splice is safe
-        for (const i of toCollect) {
-            const p = this.projs.splice(i, 1)[0];
-            this.blobs.push(this._makeBlob(p.x, p.y, p.vx * 0.2, p.vy * 0.2));
-        }
-    }
-
-    _collectVats() {
-        for (const v of this.vats) {
-            if (!v.alive) continue;
-            for (const b of this.blobs) {
-                if (Math.hypot(b.x - v.x, b.y - v.y) < v.radius + b.radius + 16) {
-                    v.alive = false;
-                    this.vatCount++;
-                    this.score += 30;
-                    // Grow cluster by 3 blobs
-                    const c = this._center();
-                    for (let j = 0; j < 3; j++) {
-                        const a = Math.PI * 2 * j / 3;
+                if (Math.hypot(pk.x - b.x, pk.y - b.y) < pk.radius + b.radius + 22) {
+                    got.add(i);
+                    const count = pk.blobCount || 1;
+                    for (let j = 0; j < count; j++) {
+                    const a = Math.PI * 2 * j / count;
                         this.blobs.push(this._makeBlob(
-                            v.x + Math.cos(a) * BLOB_R,
-                            v.y + Math.sin(a) * BLOB_R
+                            pk.x + Math.cos(a) * BLOB_R,
+                            pk.y + Math.sin(a) * BLOB_R
                         ));
                     }
-                    this._checkAccomplishments();
+                    this.score += 25 * count;
+                    this.pickupCount++;
                     break;
                 }
             }
         }
-        this.vats = this.vats.filter(v => v.alive);
+        this.pickups = this.pickups.filter((_, i) => !got.has(i));
+        this._checkPickupAccomplishments();
+        this._checkScoreAccomplishments();
     }
 
-    _collectWater() {
-        for (const w of this.waters) {
-            if (!w.alive) continue;
+    _collidePowerups() {
+        const got = new Set();
+        for (let i = 0; i < this.powerups.length; i++) {
+            const pu = this.powerups[i];
             for (const b of this.blobs) {
-                if (b.x > w.x && b.x < w.x + w.w && b.y + b.radius >= w.y) {
-                    w.alive = false;
-                    this.waterCount++;
-                    this.score += 20;
-                    // Convert water to 2 blobs
-                    for (let j = 0; j < 2; j++) {
-                        this.blobs.push(this._makeBlob(
-                            w.x + w.w * (j + 1) / 3, w.y, 0, -3
-                        ));
-                    }
-                    this._checkAccomplishments();
+                if (Math.hypot(pu.x - b.x, pu.y - b.y) < pu.radius + b.radius + 22) {
+                    got.add(i);
+                    this.speedBoostTimer = POWERUP_DURATION;
                     break;
                 }
             }
         }
-        this.waters = this.waters.filter(w => w.alive);
+        this.powerups = this.powerups.filter((_, i) => !got.has(i));
     }
 
-    // ── Level exit ────────────────────────────────────────────────────────────
-    _checkExit() {
-        const def  = this.levelDefs[this.levelIdx];
-        const exit = def.exit;
-        const c    = this._center();
-        if (c.x > exit.x && c.x < exit.x + exit.w &&
-            c.y > exit.y && c.y < exit.y + exit.h) {
-            this._onLevelComplete();
+    _reuniteProjs() {
+        for (const p of this.projs.filter(p => p.reunite)) {
+            this.blobs.push(this._makeBlob(p.x, p.y, p.vx * 0.3, p.vy * 0.3));
         }
-    }
-
-    _onLevelComplete() {
-        if (this.dead || this._transitioning) return;
-        this._transitioning = true;
-
-        if (this.blobsAtLevelStart === this.blobs.length) {
-            this._tryUnlock('untouched');
-        }
-
-        if (this.levelIdx + 1 >= this.levelDefs.length) {
-            // All levels complete – win!
-            this._tryUnlock('escaped');
-            this._checkAccomplishments();
-            this.time.delayedCall(400, () =>
-                this.scene.start('WinScene', {
-                    score: this.score,
-                    blobs: this.blobs.length,
-                    newlyUnlocked: this.newlyUnlocked,
-                })
-            );
-        } else {
-            // Next level – unlock the accomplishment for the level we're arriving at
-            if (this.levelIdx + 1 === 1) this._tryUnlock('level_2');
-            if (this.levelIdx + 1 === 2) this._tryUnlock('level_3');
-
-            this.cameras.main.flash(600, 0, 255, 100);
-            this.time.delayedCall(700, () => {
-                this._transitioning = false;
-                this._loadLevel(this.levelIdx + 1);
-            });
-        }
-    }
-
-    // ── Camera ────────────────────────────────────────────────────────────────
-    _updateCamera() {
-        const def  = this.levelDefs[this.levelIdx];
-        const c    = this._center();
-        const W    = this.scale.width;
-        const H    = this.scale.height;
-        const maxX = Math.max(0, def.worldW - W);
-
-        // Smooth horizontal follow, slightly ahead of player
-        const targetX = Math.max(0, Math.min(c.x - W * 0.38, maxX));
-        this.cameras.main.scrollX += (targetX - this.cameras.main.scrollX) * 0.08;
-    }
-
-    // ── Main loop ─────────────────────────────────────────────────────────────
-    update(time, delta) {
-        if (this.dead) return;
-        const dt = normDt(delta);
-
-        this._stepBlobs(dt);
-        this._stepProjs(dt);
-        this._stepEnemies(dt);
-
-        this._collideProjs();
-        this._collideEnemyProjs();
-        this._collideFireParticles();
-        this._collideEnemyBlobs();
-        this._collideLevelFires();
-        this._collectLandedBlobs();
-        this._collectVats();
-        this._collectWater();
-
-        if (!this._transitioning) this._checkExit();
-
-        this._updateCamera();
-        this._draw(time);
-        this._updateUI();
-
-        if (this.blobs.length === 0) {
-            this.dead = true;
-            this._checkAccomplishments();
-            this.time.delayedCall(500, () =>
-                this.scene.start('GameOverScene', {
-                    score: this.score,
-                    level: this.levelIdx + 1,
-                    newlyUnlocked: this.newlyUnlocked,
-                })
-            );
-        }
+        this.projs = this.projs.filter(p => !p.reunite);
     }
 
     // ── Rendering ─────────────────────────────────────────────────────────────
     _draw(time) {
-        this.gBg.clear();
-        this.gLevel.clear();
-        this.gVat.clear();
-        this.gWater.clear();
-        this.gFire.clear();
         this.gSlime.clear();
-        this.gBlob.clear();
-        this.gProj.clear();
         this.gEnemy.clear();
+        this.gPickup.clear();
+        this.gPowerup.clear();
+        this.gProj.clear();
+        this.gBlob.clear();
         this.gFx.clear();
 
-        this._drawBg();
-        this._drawLevel();
-        this._drawVats();
-        this._drawWater();
-        this._drawLevelFires();
-        this._drawFireParticles();
         this._drawConnections();
-        this._drawLandedBlobs();
+        this._drawEnemies();
+        this._drawPickups();
+        this._drawPowerups();
         this._drawProjs();
         this._drawBlobs();
-        this._drawEnemies();
-        this._drawEnemyProjs();
-        this._drawExit();
-        this._drawTouchFeedback();
-    }
-
-    _drawBg() {
-        const def  = this.levelDefs[this.levelIdx];
-        const g    = this.gBg;
-        const lw   = def.worldW;
-        const lh   = def.worldH;
-
-        // Base fill (already handled by camera bgColor, but draw lab tile grid)
-        g.lineStyle(1, 0x1a2a3a, 0.4);
-        for (let x = 0; x <= lw; x += 64) {
-            g.lineBetween(x, 0, x, lh);
-        }
-        for (let y = 0; y <= lh; y += 64) {
-            g.lineBetween(0, y, lw, y);
-        }
-
-        // Subtle lab decorations at fixed x-positions
-        const decorX = [300, 550, 900, 1300, 1700, 2100, 2600, 3000, 3500, 3900];
-        for (const dx of decorX) {
-            if (dx > lw - 50) continue;
-            const G = def.worldH - 52;
-            // Computer terminal silhouette
-            g.fillStyle(0x1e2d3e, 0.7);
-            g.fillRect(dx, G - 60, 40, 50);   // terminal body
-            g.fillStyle(0x2a4060, 0.6);
-            g.fillRect(dx + 4, G - 54, 32, 32); // screen
-            g.fillStyle(0x1a3a5a, 0.5);
-            g.fillRect(dx + 15, G - 10, 10, 10); // base
-            // Lab bench
-            g.fillStyle(0x2e3e4e, 0.5);
-            g.fillRect(dx + 50, G - 42, 80, 8);  // bench top
-            g.fillRect(dx + 52, G - 42, 4, 42);   // left leg
-            g.fillRect(dx + 124, G - 42, 4, 42);  // right leg
-        }
-    }
-
-    _drawLevel() {
-        const def  = this.levelDefs[this.levelIdx];
-        const g    = this.gLevel;
-        const G    = def.worldH - 52;
-
-        // Draw solid rectangles
-        for (const s of def.solids) {
-            g.fillStyle(C_GROUND, 1);
-            g.fillRect(s.x, s.y, s.w, s.h);
-            // Top highlight for ground
-            if (s.y >= G) {
-                g.fillStyle(C_PLAT_TOP, 0.35);
-                g.fillRect(s.x, s.y, s.w, 4);
-            }
-            // Wall paneling lines
-            if (s.w <= 20) {
-                g.lineStyle(1, 0x6a8099, 0.2);
-                for (let y = s.y + 60; y < s.y + s.h; y += 60) {
-                    g.lineBetween(s.x, y, s.x + s.w, y);
-                }
-            }
-        }
-
-        // Draw one-way platforms
-        for (const p of def.platforms) {
-            // Shadow
-            g.fillStyle(0x000000, 0.22);
-            g.fillRect(p.x + 3, p.y + 4, p.w, p.h);
-            // Platform body
-            g.fillStyle(C_PLATFORM, 1);
-            g.fillRect(p.x, p.y, p.w, p.h);
-            // Bright top edge
-            g.fillStyle(C_PLAT_TOP, 0.75);
-            g.fillRect(p.x, p.y, p.w, 3);
-            // Subtle bolt markers
-            for (let bx = p.x + 12; bx < p.x + p.w - 10; bx += 40) {
-                g.fillStyle(0x8899aa, 0.5);
-                g.fillCircle(bx, p.y + p.h - 4, 2);
-            }
-        }
-
-        // Caution tape stripes on ground edges
-        g.lineStyle(2, 0xffcc00, 0.18);
-        const gw = def.worldW;
-        for (let x = 0; x < gw; x += 40) {
-            if ((Math.floor(x / 40)) % 2 === 0) {
-                g.lineBetween(x, G + 1, x + 20, G + 1);
-            }
-        }
-    }
-
-    _drawVats() {
-        const g = this.gVat;
-        for (const v of this.vats) {
-            v.pulse += 0.05;
-            const pr = 1 + 0.12 * Math.sin(v.pulse);
-            const vr = v.radius * pr;
-            // Vat cylinder (rectangle base + oval top)
-            g.fillStyle(0x224433, 0.9);
-            g.fillRect(v.x - vr, v.y - vr * 1.8, vr * 2, vr * 1.8);
-            // Liquid fill (green jelly)
-            g.fillStyle(C_VAT, 0.7);
-            g.fillEllipse(v.x, v.y - vr * 0.6, vr * 1.8, vr * 0.7);
-            // Rim
-            g.lineStyle(2, 0x44cc77, 0.8);
-            g.strokeEllipse(v.x, v.y - vr * 1.5, vr * 2.1, vr * 0.5);
-            // Glow
-            g.fillStyle(C_VAT, 0.12);
-            g.fillCircle(v.x, v.y - vr, vr * 2.2);
-            // Label (J)
-            g.fillStyle(0xaaffcc, 0.7);
-            g.fillCircle(v.x, v.y - vr * 1.0, vr * 0.32);
-        }
-    }
-
-    _drawWater() {
-        const g = this.gWater;
-        for (const w of this.waters) {
-            if (!w.alive) continue;
-            // Shimmer
-            g.fillStyle(C_WATER_COL, 0.22);
-            g.fillRect(w.x - 4, w.y - 4, w.w + 8, w.h + 8);
-            g.fillStyle(C_WATER_COL, 0.65);
-            g.fillRect(w.x, w.y, w.w, w.h);
-            // Surface ripple highlight
-            g.fillStyle(0xaaddff, 0.4);
-            g.fillRect(w.x + 4, w.y, w.w - 8, 3);
-        }
-    }
-
-    _drawLevelFires() {
-        const def = this.levelDefs[this.levelIdx];
-        const g   = this.gFire;
-        const now = this.time.now;
-        for (const f of def.fires) {
-            // Animated fire
-            for (let i = 0; i < 4; i++) {
-                const flicker = Math.sin(now * 0.01 + i * 1.3) * 0.4;
-                const fr      = 10 + i * 4 + flicker * 4;
-                const fx      = f.x + (i / 3) * f.w;
-                const fy      = f.y - 6 - flicker * 8;
-                g.fillStyle(C_FIRE_COL, 0.8 - i * 0.15);
-                g.fillCircle(fx, fy, fr);
-                g.fillStyle(0xffaa00, 0.5);
-                g.fillCircle(fx, fy + 4, fr * 0.6);
-            }
-            // Base glow
-            g.fillStyle(0xff7700, 0.15);
-            g.fillRect(f.x - 8, f.y - 20, f.w + 16, f.h + 20);
-        }
-    }
-
-    _drawFireParticles() {
-        const g = this.gFire;
-        for (const fp of this.fireParticles) {
-            g.fillStyle(C_FIRE_COL, fp.alpha * 0.85);
-            g.fillCircle(fp.x, fp.y, fp.radius);
-            g.fillStyle(0xffcc00, fp.alpha * 0.45);
-            g.fillCircle(fp.x, fp.y, fp.radius * 0.5);
-        }
+        this._drawDragHint();
     }
 
     _drawConnections() {
         const g    = this.gSlime;
-        const maxD = SPRING_REST * 1.9;
+        const maxD = SPRING_REST * 1.8;
         for (let i = 0; i < this.blobs.length; i++) {
             for (let j = i + 1; j < this.blobs.length; j++) {
                 const a = this.blobs[i], b = this.blobs[j];
                 const d = Math.hypot(b.x - a.x, b.y - a.y);
                 if (d > maxD) continue;
                 const t = 1 - d / maxD;
-                g.lineStyle(3 + t * 10, C_PLAYER, t * 0.55);
+                g.lineStyle(4 + t * 12, C_PLAYER, t * 0.5);
                 g.lineBetween(a.x, a.y, b.x, b.y);
             }
         }
@@ -1389,280 +869,231 @@ class GameScene extends Phaser.Scene {
         const g = this.gBlob;
         for (const b of this.blobs) {
             const w = Math.sin(b.phase) * 0.08;
+            // Soft outer glow
             g.fillStyle(C_PLAYER_HI, 0.12);
             g.fillCircle(b.x, b.y, b.radius * 1.7);
+            // Main body (slightly squished for wobbly feel)
             g.fillStyle(C_PLAYER, 0.88);
             g.fillEllipse(b.x, b.y, (1 + w) * b.radius * 2, (1 - w) * b.radius * 2);
+            // Specular highlight
             g.fillStyle(0xaaffdd, 0.55);
             g.fillCircle(b.x - b.radius * 0.3, b.y - b.radius * 0.32, b.radius * 0.32);
-        }
-    }
-
-    _drawLandedBlobs() {
-        // Landed projectile blobs waiting to be collected
-        const g = this.gProj;
-
-        // Identify blobs that are part of a teleportable group (>= 1 sibling within range)
-        const landed = this.projs.filter(p => p.landed);
-        const inGroup = new Set();
-        for (let i = 0; i < landed.length; i++) {
-            for (let j = i + 1; j < landed.length; j++) {
-                if (Math.hypot(landed[i].x - landed[j].x, landed[i].y - landed[j].y) < TAKE_CONTROL_GROUP_RAD) {
-                    inGroup.add(landed[i]);
-                    inGroup.add(landed[j]);
-                }
-            }
-        }
-
-        for (const p of this.projs) {
-            if (!p.landed) continue;
-            // Dim version – sitting on the ground
-            const w = Math.sin(p.phase) * 0.08;
-            g.fillStyle(C_PROJ, 0.25);
-            g.fillCircle(p.x, p.y, p.radius * 1.5);
-            g.fillStyle(C_PROJ, 0.65);
-            g.fillEllipse(p.x, p.y, (1 + w) * p.radius * 2, (1 - w) * p.radius * 2);
-            // Pulsing ring to indicate collectable
-            const ring = 1 + 0.3 * Math.sin(p.phase * 2);
-            g.lineStyle(1.5, C_PROJ, 0.5 * ring);
-            g.strokeCircle(p.x, p.y, p.radius * 2.0 * ring);
-
-            // Extra outer ring for teleportable groups
-            if (inGroup.has(p)) {
-                const pulse = 0.5 + 0.5 * Math.sin(p.phase * 1.5);
-                g.lineStyle(2, 0x00ffcc, 0.35 + 0.25 * pulse);
-                g.strokeCircle(p.x, p.y, p.radius * 3.2);
-            }
         }
     }
 
     _drawProjs() {
         const g = this.gProj;
         for (const p of this.projs) {
-            if (p.landed) continue;
-            // Trail
+            // Motion trail
             for (let t = 0; t < p.trail.length; t++) {
                 const tr = p.trail[t];
-                const a  = (1 - t / p.trail.length) * 0.45;
-                const r  = p.radius * (1 - t / p.trail.length) * 0.55;
+                const a  = (1 - t / p.trail.length) * 0.4;
+                const r  = p.radius * (1 - t / p.trail.length) * 0.6;
                 if (r < 1) continue;
                 g.fillStyle(C_PROJ, a);
                 g.fillCircle(tr.x, tr.y, r);
             }
-            g.fillStyle(0xffffff, 0.1);
+            // Glow
+            g.fillStyle(0xffffff, 0.12);
             g.fillCircle(p.x, p.y, p.radius * 2);
+            // Body
             const w = Math.sin(p.phase) * 0.1;
             g.fillStyle(C_PROJ, 0.92);
             g.fillEllipse(p.x, p.y, (1 + w) * p.radius * 2, (1 - w) * p.radius * 2);
-            g.fillStyle(0xffffff, 0.6);
+            // Highlight
+            g.fillStyle(0xffffff, 0.65);
             g.fillCircle(p.x - p.radius * 0.3, p.y - p.radius * 0.3, p.radius * 0.3);
         }
     }
 
     _drawEnemies() {
         const g = this.gEnemy;
-        for (const e of this.enemies) {
-            const flashed = e.hitTimer > 0;
-            const d       = e.dir;  // 1 = facing right, -1 = facing left
 
-            if (e.type === 'scientist') {
-                // Lab coat (white body rectangle)
-                const col = flashed ? 0xffffff : 0xddddee;
-                const headCol = flashed ? 0xffffff : 0xffccaa;
-                // Body
-                g.fillStyle(col, 0.95);
-                g.fillRect(e.x - 9, e.y - 24, 18, 26);
-                // Head
-                g.fillStyle(headCol, 0.9);
-                g.fillRect(e.x - 7, e.y - 38, 14, 14);
-                // Glasses (two small rectangles)
-                g.fillStyle(0x3399ff, 0.8);
-                g.fillRect(e.x + (d > 0 ? 0 : -7), e.y - 33, 6, 4);
-                // Lab coat front line
-                g.lineStyle(1, 0xaaaacc, 0.5);
-                g.lineBetween(e.x, e.y - 22, e.x, e.y + 2);
-                // Arms
-                g.fillStyle(col, 0.7);
-                g.fillRect(e.x - 14, e.y - 22, 4, 14);
-                g.fillRect(e.x + 10,  e.y - 22, 4, 14);
-                // Gun barrel hint
-                g.fillStyle(0x555566, 0.9);
-                g.fillRect(e.x + d * 13, e.y - 16, d * 8, 3);
-            } else if (e.type === 'guard') {
-                // Guard: blue-gray uniform + helmet
-                const col = flashed ? 0xffffff : 0x5577aa;
-                const bodyCol = flashed ? 0xffffff : 0x4466aa;
-                const helmCol = flashed ? 0xffffff : 0x334466;
-                // Body
-                g.fillStyle(bodyCol, 0.95);
-                g.fillRect(e.x - 10, e.y - 26, 20, 28);
-                // Head
-                g.fillStyle(0xffccaa, 0.9);
-                g.fillRect(e.x - 8, e.y - 40, 16, 14);
-                // Helmet
-                g.fillStyle(helmCol, 0.95);
-                g.fillRect(e.x - 9, e.y - 44, 18, 10);
-                g.fillStyle(helmCol, 0.6);
-                g.fillRect(e.x + (d > 0 ? -9 : 1), e.y - 38, 8, 4);
-                // Arms
-                g.fillStyle(bodyCol, 0.75);
-                g.fillRect(e.x - 15, e.y - 24, 4, 16);
-                g.fillRect(e.x + 11,  e.y - 24, 4, 16);
-                // Rifle
-                g.fillStyle(0x222233, 0.9);
-                g.fillRect(e.x + d * 12, e.y - 18, d * 14, 4);
-                g.fillRect(e.x + d * 25, e.y - 22, d * 3, 8);
-                // Belt buckle
-                g.fillStyle(0xffcc00, 0.6);
-                g.fillRect(e.x - 4, e.y - 2, 8, 4);
+        // Enemy projectiles (shooter type)
+        for (const ep of this.enemyProjs) {
+            g.fillStyle(0xff6600, 0.25);
+            g.fillCircle(ep.x, ep.y, ep.radius * 2.2);
+            g.fillStyle(0xff9900, 0.95);
+            g.fillCircle(ep.x, ep.y, ep.radius);
+            g.fillStyle(0xffdd88, 0.7);
+            g.fillCircle(ep.x - ep.radius * 0.3, ep.y - ep.radius * 0.3, ep.radius * 0.4);
+        }
+
+        for (const e of this.enemies) {
+            const ew = Math.sin(e.phase) * 0.09;
+
+            if (e.type === 'fast') {
+                // Fast enemies: vivid crimson/blood-red, smaller, pointy-ish
+                const col = e.hitTimer > 0 ? 0xffffff : 0xdd0033;
+                g.fillStyle(0x880011, 0.25);
+                g.fillCircle(e.x, e.y, e.radius * 1.8);
+                g.fillStyle(col, 0.92);
+                g.fillEllipse(e.x, e.y, (1 + ew * 1.5) * e.radius * 2, (1 - ew * 1.5) * e.radius * 2);
+                g.fillStyle(0xff4466, 0.5);
+                g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.28);
+            } else if (e.type === 'shooter') {
+                // Shooter enemies: deep orange/yellow with a crosshair dot
+                const col = e.hitTimer > 0 ? 0xffffff : 0xff8800;
+                g.fillStyle(0xff6600, 0.16);
+                g.fillCircle(e.x, e.y, e.radius * 1.7);
+                g.fillStyle(col, 0.9);
+                g.fillEllipse(e.x, e.y, (1 + ew) * e.radius * 2, (1 - ew) * e.radius * 2);
+                // Inner dot indicator
+                g.fillStyle(0xffee00, 0.85);
+                g.fillCircle(e.x, e.y, e.radius * 0.35);
+                g.fillStyle(0xffcc44, 0.5);
+                g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.28);
             } else {
-                // Flamethrower: olive/brown + tank + nozzle
-                const col = flashed ? 0xffffff : 0x667744;
-                const tankCol = flashed ? 0xdddddd : 0x8b5e3c;
-                // Body (heavier build)
-                g.fillStyle(col, 0.95);
-                g.fillRect(e.x - 12, e.y - 28, 24, 30);
-                // Head
-                g.fillStyle(0xffccaa, 0.9);
-                g.fillRect(e.x - 8, e.y - 42, 16, 14);
-                // Helmet (full face coverage)
-                g.fillStyle(0x445533, 0.9);
-                g.fillRect(e.x - 9, e.y - 46, 18, 14);
-                g.fillStyle(0x99aaaa, 0.4);
-                g.fillRect(e.x - 6, e.y - 44, 12, 8);
-                // Tank on back (opposite of facing dir)
-                g.fillStyle(tankCol, 0.9);
-                g.fillCircle(e.x - d * 14, e.y - 18, 9);
-                g.fillCircle(e.x - d * 14, e.y - 8,  7);
-                // Hose
-                g.lineStyle(3, 0x7b4c2a, 0.8);
-                g.lineBetween(e.x - d * 8, e.y - 16, e.x + d * 8, e.y - 14);
-                // Nozzle / flamethrower gun
-                g.fillStyle(0x333322, 0.95);
-                g.fillRect(e.x + d * 8,  e.y - 18, d * 18, 6);
-                g.fillRect(e.x + d * 24, e.y - 20, d * 4,  10);
+                // Normal enemies: classic red
+                const col = e.hitTimer > 0 ? 0xffffff : C_ENEMY;
+                g.fillStyle(0xff3300, 0.14);
+                g.fillCircle(e.x, e.y, e.radius * 1.6);
+                g.fillStyle(col, 0.9);
+                g.fillEllipse(e.x, e.y, (1 + ew) * e.radius * 2, (1 - ew) * e.radius * 2);
+                g.fillStyle(0xff8866, 0.4);
+                g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.3);
             }
 
-            // Health pips
+            // Health pips (shown for enemies with more than 1 hp)
             if (e.maxHealth > 1) {
                 for (let h = 0; h < e.maxHealth; h++) {
-                    g.fillStyle(h < e.health ? 0xff6600 : 0x222233, 0.9);
-                    g.fillCircle(e.x - e.maxHealth * 4 + h * 8, e.y - 52, 3);
+                    const a = (Math.PI * 2 * h / e.maxHealth) - Math.PI / 2;
+                    const r = e.radius + 7;
+                    g.fillStyle(h < e.health ? 0xff5500 : 0x222222, 1);
+                    g.fillCircle(e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, 3);
                 }
             }
         }
     }
 
-    _drawEnemyProjs() {
-        const g = this.gEnemy;
-        for (const ep of this.enemyProjs) {
-            const col = ep.type === 'guard' ? 0xffcc33 : 0xffaa66;
-            g.fillStyle(col, 0.9);
-            g.fillCircle(ep.x, ep.y, ep.radius);
-            g.fillStyle(0xffffff, 0.5);
-            g.fillCircle(ep.x - ep.radius * 0.3, ep.y - ep.radius * 0.3, ep.radius * 0.35);
+    _drawPickups() {
+        const g = this.gPickup;
+        for (const pk of this.pickups) {
+            const r = pk.radius * (1 + 0.2 * Math.sin(pk.pulse));
+            // Outer ring
+            g.fillStyle(C_PICKUP, 0.13);
+            g.fillCircle(pk.x, pk.y, r * 2.5);
+            // Body
+            g.fillStyle(C_PICKUP, 0.75);
+            g.fillCircle(pk.x, pk.y, r);
+            // Highlight
+            g.fillStyle(0xaaffcc, 0.6);
+            g.fillCircle(pk.x - r * 0.3, pk.y - r * 0.3, r * 0.3);
+            // Orbiting mini-blobs indicate how many blobs will be granted
+            const count = pk.blobCount || 1;
+            if (count > 1) {
+                const orbitR  = r * 1.8 + 2;
+                const miniR   = Math.max(3, BLOB_R * 0.28);
+                const shown   = Math.min(count, 8); // cap visual orbs to 8
+                for (let j = 0; j < shown; j++) {
+                    const a  = (Math.PI * 2 * j / shown) + pk.pulse * 0.5;
+                    const ox = pk.x + Math.cos(a) * orbitR;
+                    const oy = pk.y + Math.sin(a) * orbitR;
+                    g.fillStyle(C_PICKUP, 0.55);
+                    g.fillCircle(ox, oy, miniR);
+                }
+            }
         }
     }
 
-    _drawExit() {
-        const def  = this.levelDefs[this.levelIdx];
-        const exit = def.exit;
-        const g    = this.gFx;
-        const now  = this.time.now;
-        const glow = 0.6 + 0.3 * Math.sin(now * 0.003);
-
-        // Door frame
-        g.lineStyle(4, C_EXIT, glow);
-        g.strokeRect(exit.x, exit.y, exit.w, exit.h);
-        // Door fill
-        g.fillStyle(C_EXIT, 0.08);
-        g.fillRect(exit.x, exit.y, exit.w, exit.h);
-        // Inner door highlight
-        g.lineStyle(2, 0xaaffdd, glow * 0.5);
-        g.strokeRect(exit.x + 5, exit.y + 5, exit.w - 10, exit.h - 10);
-        // Arrow
-        g.fillStyle(C_EXIT, glow * 0.9);
-        const ax = exit.x + exit.w / 2;
-        const ay = exit.y + exit.h / 2;
-        g.fillTriangle(ax, ay - 12, ax + 14, ay, ax, ay + 12);
-        g.fillRect(ax - 14, ay - 5, 14, 10);
-        // "EXIT" label above
-        // (drawn as simple line pattern, not text, to keep in world space)
+    _drawPowerups() {
+        const g = this.gPowerup;
+        for (const pu of this.powerups) {
+            const r    = pu.radius * (1 + 0.25 * Math.sin(pu.pulse));
+            const spin = pu.pulse * 0.8;
+            // Outer pulsing glow
+            g.fillStyle(C_POWERUP, 0.12);
+            g.fillCircle(pu.x, pu.y, r * 3.0);
+            // Mid ring
+            g.fillStyle(C_POWERUP, 0.22);
+            g.fillCircle(pu.x, pu.y, r * 2.0);
+            // Core body
+            g.fillStyle(C_POWERUP, 0.90);
+            g.fillCircle(pu.x, pu.y, r);
+            // Specular highlight
+            g.fillStyle(0xeeccff, 0.65);
+            g.fillCircle(pu.x - r * 0.3, pu.y - r * 0.3, r * 0.3);
+            // Spinning star points (4 small dots)
+            for (let j = 0; j < 4; j++) {
+                const a  = spin + (Math.PI / 2) * j;
+                const ox = pu.x + Math.cos(a) * r * 1.55;
+                const oy = pu.y + Math.sin(a) * r * 1.55;
+                g.fillStyle(0xeeccff, 0.80);
+                g.fillCircle(ox, oy, r * 0.22);
+            }
+        }
     }
 
-    _drawTouchFeedback() {
-        // Draw a long-press progress ring in world space while the pointer is held still
-        if (!this._dragStart || this._isDragging || this._pressStartTime === 0) return;
-
-        const elapsed = this.time.now - this._pressStartTime;
-        const pct     = Math.min(elapsed / TELEPORT_HOLD_MS, 1.0);
-        if (pct < 0.1) return;
-
-        const g  = this.gFx;
-        const wx = this._dragStart.worldX;
-        const wy = this._dragStart.worldY;
-        const r  = BLOB_R * 3.8;
-
-        // Check if there are landed blobs nearby (teleport target)
-        const hasTarget = this.projs.some(
-            p => p.landed && Math.hypot(p.x - wx, p.y - wy) < TAKE_CONTROL_RADIUS
-        );
-        const ringCol = hasTarget ? 0x00ffcc : 0x88bbcc;
-
-        // Background circle
-        g.lineStyle(2, ringCol, 0.18);
-        g.strokeCircle(wx, wy, r);
-
-        // Progress arc (approximate with line segments)
-        const segments  = Math.ceil(pct * 36);
-        const startAngle = -Math.PI / 2;
-        g.lineStyle(3, ringCol, 0.85);
-        for (let i = 0; i < segments; i++) {
-            const a1 = startAngle + (Math.PI * 2 * pct) * i / segments;
-            const a2 = startAngle + (Math.PI * 2 * pct) * (i + 1) / segments;
-            g.lineBetween(
-                wx + Math.cos(a1) * r, wy + Math.sin(a1) * r,
-                wx + Math.cos(a2) * r, wy + Math.sin(a2) * r
-            );
-        }
-
-        // Bright centre dot
-        g.fillStyle(ringCol, 0.5 * pct);
-        g.fillCircle(wx, wy, BLOB_R * 0.7);
+    _drawDragHint() {
+        if (!this.ptrDown || !this.dragging || !this.ptrCurrent) return;
+        const g = this.gFx;
+        const c = this._center();
+        const dx = this.ptrCurrent.x - c.x;
+        const dy = this.ptrCurrent.y - c.y;
+        if (Math.hypot(dx, dy) < 5) return;
+        // Draw a line from cluster centre to pointer, showing pull direction
+        g.lineStyle(2, 0x88ffcc, 0.3);
+        g.lineBetween(c.x, c.y, this.ptrCurrent.x, this.ptrCurrent.y);
+        g.fillStyle(0x88ffcc, 0.2);
+        g.fillCircle(this.ptrCurrent.x, this.ptrCurrent.y, 14);
     }
 
     // ── UI ────────────────────────────────────────────────────────────────────
     _createUI() {
-        const D = 20;
-        const W = this.scale.width;
-        const H = this.scale.height;
-
+        const D  = 20;
+        const W  = this.scale.width;
+        const H  = this.scale.height;
         this.txtScore = this.add.text(16, 16, 'Score: 0', {
-            fontSize: '21px', fill: '#ffffff', fontFamily: 'monospace',
+            fontSize: '22px', fill: '#ffffff', fontFamily: 'monospace',
             stroke: '#000000', strokeThickness: 3
-        }).setScrollFactor(0).setDepth(D);
+        }).setDepth(D);
 
         this.txtBlobs = this.add.text(16, 44, `Blobs: ${N_START}`, {
-            fontSize: '21px', fill: '#00ff88', fontFamily: 'monospace',
+            fontSize: '22px', fill: '#00ff88', fontFamily: 'monospace',
             stroke: '#000000', strokeThickness: 3
-        }).setScrollFactor(0).setDepth(D);
+        }).setDepth(D);
 
-        this.txtLevel = this.add.text(W / 2, 22, '', {
-            fontSize: '22px', fill: '#ffdd44', fontFamily: 'monospace',
-            fontStyle: 'bold', stroke: '#000', strokeThickness: 3
-        }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(D);
+        this.txtPowerup = this.add.text(16, 72, '', {
+            fontSize: '18px', fill: '#cc44ff', fontFamily: 'monospace',
+            stroke: '#000000', strokeThickness: 2
+        }).setDepth(D);
 
-        this.txtHint = this.add.text(W / 2, H - 105, 'Drag / A / D to slide  ·  Tap to shoot 1 blob  ·  Long-press landed blobs to take control', {
-            fontSize: '13px', fill: '#99aabb', fontFamily: 'monospace'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(D);
-        this.time.delayedCall(6000, () =>
+        this.txtWave = this.add.text(W - 16, 16, 'Wave 0', {
+            fontSize: '22px', fill: '#ffaa00', fontFamily: 'monospace',
+            stroke: '#000000', strokeThickness: 3
+        }).setOrigin(1, 0).setDepth(D);
+
+        this.txtHint = this.add.text(
+            W / 2, H - 35,
+            'DRAG to move  ·  TAP to shoot',
+            { fontSize: '15px', fill: '#666688', fontFamily: 'monospace' }
+        ).setOrigin(0.5).setDepth(D);
+
+        this.time.delayedCall(5000, () =>
             this.tweens.add({ targets: this.txtHint, alpha: 0, duration: 1500 })
         );
 
-        this.scale.on('resize', (gs) => {
-            if (this.txtLevel)  this.txtLevel.setX(gs.width / 2);
-            if (this.txtHint)   this.txtHint.setX(gs.width / 2).setY(gs.height - 105);
-        });
+        // Wave announcement banner (shown briefly at wave start)
+        this.txtWaveBanner = this.add.text(W / 2, H / 2 - 90, '', {
+            fontSize: '48px', fill: '#ffdd00', fontFamily: 'monospace',
+            fontStyle: 'bold', stroke: '#000', strokeThickness: 5
+        }).setOrigin(0.5).setAlpha(0).setDepth(25);
+
+        // Between-wave UI (wave complete, reward, countdown)
+        this.txtWaveComplete = this.add.text(W / 2, H / 2 - 60, '', {
+            fontSize: '36px', fill: '#00ff88', fontFamily: 'monospace',
+            fontStyle: 'bold', stroke: '#000', strokeThickness: 4
+        }).setOrigin(0.5).setAlpha(0).setDepth(25);
+
+        this.txtWaveReward = this.add.text(W / 2, H / 2, '', {
+            fontSize: '28px', fill: '#00eeff', fontFamily: 'monospace',
+            stroke: '#000', strokeThickness: 3
+        }).setOrigin(0.5).setAlpha(0).setDepth(25);
+
+        this.txtNextWave = this.add.text(W / 2, H / 2 + 60, '', {
+            fontSize: '22px', fill: '#aaaacc', fontFamily: 'monospace',
+            stroke: '#000', strokeThickness: 2
+        }).setOrigin(0.5).setAlpha(0).setDepth(25);
     }
 
     _updateUI() {
@@ -1670,7 +1101,16 @@ class GameScene extends Phaser.Scene {
         this.txtScore.setText(`Score: ${this.score}`);
         this.txtBlobs.setText(`Blobs: ${total}`);
         const pct = total / N_START;
-        this.txtBlobs.setStyle({ fill: pct > 0.6 ? '#00ff88' : pct > 0.3 ? '#ffcc00' : '#ff4444' });
+        this.txtBlobs.setStyle({
+            fill: pct > 0.6 ? '#00ff88' : pct > 0.3 ? '#ffcc00' : '#ff4444'
+        });
+        this.txtWave.setX(this.scale.width - 16);
+        if (this.speedBoostTimer > 0) {
+            const secs = Math.ceil(this.speedBoostTimer / 1000);
+            this.txtPowerup.setText(`⚡ SPEED BOOST  ${secs}s`);
+        } else {
+            this.txtPowerup.setText('');
+        }
     }
 }
 
@@ -1681,168 +1121,84 @@ class GameOverScene extends Phaser.Scene {
     constructor() { super({ key: 'GameOverScene' }); }
 
     create(data) {
-        this.cameras.main.setBackgroundColor('#0a0e14');
+        this.cameras.main.setBackgroundColor('#080818');
         const W = this.scale.width, H = this.scale.height;
 
         // Background blob decoration
         const gfx = this.add.graphics();
-        for (let i = 0; i < 18; i++) {
-            gfx.fillStyle(0x00aa44, 0.06 + Math.random() * 0.05);
-            gfx.fillCircle(Math.random() * W, Math.random() * H, 20 + Math.random() * 65);
+        for (let i = 0; i < 22; i++) {
+            gfx.fillStyle(0x00aa44, 0.07 + Math.random() * 0.06);
+            gfx.fillCircle(
+                Math.random() * W,
+                Math.random() * H,
+                20 + Math.random() * 70
+            );
         }
 
-        this.add.text(W / 2, H / 2 - 120, '◆  CAPTURED  ◆', {
-            fontSize: '46px', fill: '#ff4444', fontFamily: 'monospace',
+        this.add.text(W / 2, H / 2 - 110, '✦  GAME OVER  ✦', {
+            fontSize: '52px', fill: '#ff4444', fontFamily: 'monospace',
             fontStyle: 'bold', stroke: '#000', strokeThickness: 4
         }).setOrigin(0.5);
 
-        this.add.text(W / 2, H / 2 - 55, 'The lab security overpowered you…', {
-            fontSize: '17px', fill: '#aa8866', fontFamily: 'monospace',
-            stroke: '#000', strokeThickness: 2
-        }).setOrigin(0.5);
-
-        this.add.text(W / 2, H / 2 - 10, `Score: ${data.score}`, {
-            fontSize: '32px', fill: '#ffffff', fontFamily: 'monospace',
+        this.add.text(W / 2, H / 2 - 30, `Score: ${data.score}`, {
+            fontSize: '34px', fill: '#ffffff', fontFamily: 'monospace',
             stroke: '#000', strokeThickness: 3
         }).setOrigin(0.5);
 
-        this.add.text(W / 2, H / 2 + 36, `Reached: Level ${data.level}`, {
+        this.add.text(W / 2, H / 2 + 22, `Waves Survived: ${data.wave}`, {
             fontSize: '22px', fill: '#ffaa00', fontFamily: 'monospace',
             stroke: '#000', strokeThickness: 2
         }).setOrigin(0.5);
 
-        const btn = this.add.text(W / 2, H / 2 + 100, '[ TRY AGAIN ]', {
+        const btn = this.add.text(W / 2, H / 2 + 95, '[ PLAY AGAIN ]', {
             fontSize: '30px', fill: '#00ff88', fontFamily: 'monospace',
             stroke: '#000', strokeThickness: 3, padding: { x: 16, y: 8 }
         }).setOrigin(0.5).setInteractive({ cursor: 'pointer' });
-        btn.on('pointerover',  () => btn.setStyle({ fill: '#88ffcc' }));
-        btn.on('pointerout',   () => btn.setStyle({ fill: '#00ff88' }));
-        btn.on('pointerdown',  () => this.scene.start('GameScene'));
-        this.tweens.add({ targets: btn, scaleX: 1.06, scaleY: 1.06, yoyo: true, repeat: -1, duration: 700 });
 
-        // Newly unlocked accomplishments
+        btn.on('pointerover', () => btn.setStyle({ fill: '#88ffcc' }));
+        btn.on('pointerout',  () => btn.setStyle({ fill: '#00ff88' }));
+        btn.on('pointerdown', () => this.scene.start('GameScene'));
+
+        this.tweens.add({
+            targets : btn,
+            scaleX  : 1.06, scaleY: 1.06,
+            yoyo    : true,  repeat: -1,
+            duration: 700
+        });
+
+        // Newly unlocked accomplishments (show up to 4; cap avoids overflow on short screens)
         const nu = (data.newlyUnlocked || []).slice(0, 4);
         if (nu.length > 0) {
-            this.add.text(W / 2, H / 2 + 150, '★ NEW ACCOMPLISHMENTS ★', {
-                fontSize: '14px', fill: '#ffcc33', fontFamily: 'monospace',
+            this.add.text(W / 2, H / 2 + 148, '★ NEW ACCOMPLISHMENTS ★', {
+                fontSize: '15px', fill: '#ffcc33', fontFamily: 'monospace',
                 fontStyle: 'bold', stroke: '#000', strokeThickness: 2
             }).setOrigin(0.5);
-            let yOff = H / 2 + 172;
+            let yOff = H / 2 + 170;
             for (const id of nu) {
                 const def = ACCOMPLISH_DEFS.find(d => d.id === id);
                 if (!def) continue;
                 this.add.text(W / 2, yOff, `✦ ${def.name}  –  ${def.desc}`, {
-                    fontSize: '12px', fill: '#ffdd66', fontFamily: 'monospace', stroke: '#000', strokeThickness: 2
-                }).setOrigin(0.5);
-                yOff += 20;
-            }
-        }
-
-        this.time.delayedCall(600, () => {
-            this.input.on('pointerdown', () => this.scene.start('GameScene'));
-        });
-    }
-}
-
-// =============================================================================
-//  WinScene
-// =============================================================================
-class WinScene extends Phaser.Scene {
-    constructor() { super({ key: 'WinScene' }); }
-
-    create(data) {
-        this.cameras.main.setBackgroundColor('#040e08');
-        const W = this.scale.width, H = this.scale.height;
-
-        const gfx = this.add.graphics();
-        // Celebratory green blobs
-        const blobs = [];
-        for (let i = 0; i < 20; i++) {
-            blobs.push({
-                x: Math.random() * W, y: Math.random() * H,
-                r: 12 + Math.random() * 40,
-                phase: Math.random() * Math.PI * 2,
-                vx: (Math.random() - 0.5) * 0.6,
-                vy: (Math.random() - 0.5) * 0.6,
-                col: [0x00dd77, 0x22ff99, 0x00aa55][Math.floor(Math.random() * 3)]
-            });
-        }
-
-        this.add.text(W / 2, H / 2 - 130, '★  ESCAPED!  ★', {
-            fontSize: '54px', fill: '#00ff88', fontFamily: 'monospace',
-            fontStyle: 'bold', stroke: '#000', strokeThickness: 5
-        }).setOrigin(0.5).setDepth(5);
-
-        this.add.text(W / 2, H / 2 - 60, 'You broke out of the lab!\nThe world is yours, blob.', {
-            fontSize: '20px', fill: '#aaffcc', fontFamily: 'monospace',
-            stroke: '#000', strokeThickness: 2, align: 'center'
-        }).setOrigin(0.5).setDepth(5);
-
-        this.add.text(W / 2, H / 2 + 12, `Final Score: ${data.score}`, {
-            fontSize: '32px', fill: '#ffdd44', fontFamily: 'monospace',
-            stroke: '#000', strokeThickness: 3
-        }).setOrigin(0.5).setDepth(5);
-
-        this.add.text(W / 2, H / 2 + 55, `Blobs remaining: ${data.blobs}`, {
-            fontSize: '20px', fill: '#88ff88', fontFamily: 'monospace',
-            stroke: '#000', strokeThickness: 2
-        }).setOrigin(0.5).setDepth(5);
-
-        const btn = this.add.text(W / 2, H / 2 + 115, '[ PLAY AGAIN ]', {
-            fontSize: '30px', fill: '#00ff88', fontFamily: 'monospace',
-            stroke: '#000', strokeThickness: 3, padding: { x: 16, y: 8 }
-        }).setOrigin(0.5).setInteractive({ cursor: 'pointer' }).setDepth(5);
-        btn.on('pointerover',  () => btn.setStyle({ fill: '#88ffcc' }));
-        btn.on('pointerout',   () => btn.setStyle({ fill: '#00ff88' }));
-        btn.on('pointerdown',  () => this.scene.start('GameScene'));
-        this.tweens.add({ targets: btn, scaleX: 1.06, scaleY: 1.06, yoyo: true, repeat: -1, duration: 700 });
-
-        // Newly unlocked
-        const nu = (data.newlyUnlocked || []).slice(0, 4);
-        if (nu.length > 0) {
-            this.add.text(W / 2, H / 2 + 165, '★ NEW ACCOMPLISHMENTS ★', {
-                fontSize: '14px', fill: '#ffcc33', fontFamily: 'monospace',
-                fontStyle: 'bold', stroke: '#000', strokeThickness: 2
-            }).setOrigin(0.5).setDepth(5);
-            let yOff = H / 2 + 185;
-            for (const id of nu) {
-                const def = ACCOMPLISH_DEFS.find(d => d.id === id);
-                if (!def) continue;
-                this.add.text(W / 2, yOff, `✦ ${def.name}  –  ${def.desc}`, {
-                    fontSize: '12px', fill: '#ffdd66', fontFamily: 'monospace',
+                    fontSize: '13px', fill: '#ffdd66', fontFamily: 'monospace',
                     stroke: '#000', strokeThickness: 2
-                }).setOrigin(0.5).setDepth(5);
-                yOff += 20;
+                }).setOrigin(0.5);
+                yOff += 21;
+            }
+            if (data.newlyUnlocked.length > 4) {
+                this.add.text(W / 2, yOff, `+${data.newlyUnlocked.length - 4} more…`, {
+                    fontSize: '12px', fill: '#aa8833', fontFamily: 'monospace'
+                }).setOrigin(0.5);
             }
         }
 
-        // Animated background blobs
-        this.events.on('update', (time, delta) => {
-            const dt = normDt(delta);
-            gfx.clear();
-            for (const b of blobs) {
-                b.x += b.vx * dt; b.y += b.vy * dt;
-                b.phase += 0.018 * dt;
-                if (b.x < -60)    b.x = W + 60;
-                if (b.x > W + 60) b.x = -60;
-                if (b.y < -60)    b.y = H + 60;
-                if (b.y > H + 60) b.y = -60;
-                const rr = b.r * (1 + Math.sin(b.phase) * 0.08);
-                gfx.fillStyle(b.col, 0.12);
-                gfx.fillCircle(b.x, b.y, rr * 1.7);
-                gfx.fillStyle(b.col, 0.55);
-                gfx.fillCircle(b.x, b.y, rr);
-            }
-        });
-
-        this.time.delayedCall(700, () => {
+        // Also allow tapping anywhere to restart (after a short guard delay)
+        this.time.delayedCall(800, () => {
             this.input.on('pointerdown', () => this.scene.start('GameScene'));
         });
     }
 }
 
 // =============================================================================
-//  TitleScene
+//  Boot / title screen
 // =============================================================================
 class TitleScene extends Phaser.Scene {
     constructor() { super({ key: 'TitleScene' }); }
@@ -1851,101 +1207,105 @@ class TitleScene extends Phaser.Scene {
         this.cameras.main.setBackgroundColor('#080818');
         const W = this.scale.width, H = this.scale.height;
 
+        // Animated blob decorations
         const gfx = this.add.graphics();
         const decorBlobs = [];
-        for (let i = 0; i < 14; i++) {
+        for (let i = 0; i < 15; i++) {
             decorBlobs.push({
                 x: Math.random() * W, y: Math.random() * H,
-                r: 14 + Math.random() * 42,
+                r: 15 + Math.random() * 45,
                 phase: Math.random() * Math.PI * 2,
-                vx: (Math.random() - 0.5) * 0.35,
-                vy: (Math.random() - 0.5) * 0.35,
+                speed: 0.015 + Math.random() * 0.02,
+                vx: (Math.random() - 0.5) * 0.4,
+                vy: (Math.random() - 0.5) * 0.4,
                 col: [0x00dd77, 0x22ff99, 0x00aa55][Math.floor(Math.random() * 3)]
             });
         }
 
-        this.add.text(W / 2, H / 2 - 130, '★ StarJelly ★', {
-            fontSize: '62px', fill: '#00ff88', fontFamily: 'monospace',
+        // Title text
+        this.add.text(W / 2, H / 2 - 100, '★ StarJelly ★', {
+            fontSize: '64px', fill: '#00ff88', fontFamily: 'monospace',
             fontStyle: 'bold', stroke: '#000', strokeThickness: 5
         }).setOrigin(0.5).setDepth(10);
 
-        this.add.text(W / 2, H / 2 - 60, 'Lab Escape', {
-            fontSize: '26px', fill: '#aaffcc', fontFamily: 'monospace',
+        this.add.text(W / 2, H / 2 - 30, 'A jelly-blob survival game', {
+            fontSize: '20px', fill: '#aaffcc', fontFamily: 'monospace',
             stroke: '#000', strokeThickness: 2
         }).setOrigin(0.5).setDepth(10);
 
-        this.add.text(W / 2, H / 2 - 20, [
-            'You are an escaped jelly-blob experiment.',
-            'Fight through the lab and reach the exit!',
-        ].join('\n'), {
-            fontSize: '15px', fill: '#778899', fontFamily: 'monospace',
-            align: 'center', stroke: '#000', strokeThickness: 1
-        }).setOrigin(0.5).setDepth(10);
-
-        this.add.text(W / 2, H / 2 + 32,
-            'Drag / A / D to slide  ·  Tap to shoot 1 blob  ·  Long-press landed blobs to take control',
-            { fontSize: '13px', fill: '#556677', fontFamily: 'monospace' }
+        this.add.text(W / 2, H / 2 + 30,
+            'DRAG to slide  ·  TAP to shoot',
+            { fontSize: '18px', fill: '#888888', fontFamily: 'monospace' }
         ).setOrigin(0.5).setDepth(10);
 
-        const btn = this.add.text(W / 2, H / 2 + 90, '[ START ]', {
+        const btn = this.add.text(W / 2, H / 2 + 100, '[ START ]', {
             fontSize: '36px', fill: '#00ff88', fontFamily: 'monospace',
             stroke: '#000', strokeThickness: 3, padding: { x: 16, y: 8 }
         }).setOrigin(0.5).setInteractive({ cursor: 'pointer' }).setDepth(10);
-        btn.on('pointerover',  () => btn.setStyle({ fill: '#88ffcc' }));
-        btn.on('pointerout',   () => btn.setStyle({ fill: '#00ff88' }));
-        btn.on('pointerdown',  () => this.scene.start('GameScene'));
-        this.tweens.add({ targets: btn, scaleX: 1.06, scaleY: 1.06, yoyo: true, repeat: -1, duration: 700 });
 
-        this.add.text(W / 2, H - 22,
-            'Jelly vats grow your cluster  ·  Shoot blobs to defeat enemies  ·  Beware fire!',
-            { fontSize: '12px', fill: '#334455', fontFamily: 'monospace' }
+        btn.on('pointerover', () => btn.setStyle({ fill: '#88ffcc' }));
+        btn.on('pointerout',  () => btn.setStyle({ fill: '#00ff88' }));
+        btn.on('pointerdown', () => this.scene.start('GameScene'));
+
+        this.tweens.add({
+            targets: btn, scaleX: 1.06, scaleY: 1.06,
+            yoyo: true, repeat: -1, duration: 700
+        });
+
+        this.add.text(W / 2, H - 24,
+            'Your blob-count is your health  ·  Shoot blobs to kill enemies  ·  Collect cyan blobs to grow',
+            { fontSize: '12px', fill: '#444466', fontFamily: 'monospace' }
         ).setOrigin(0.5).setDepth(10);
 
-        // ── Accomplishments panel ──
+        // ── Accomplishments panel ──────────────────────────────────────────────
         const accs          = Accomplishments.getAll();
         const unlockedCount = accs.filter(a => a.unlocked).length;
-        const lineH         = 18;
+        const lineH         = 19;
         const cols          = 2;
         const rows          = Math.ceil(accs.length / cols);
-        const panelH        = rows * lineH + 24;
-        const panelTop      = Math.max(H / 2 + 140, H - 38 - panelH);
+        const panelH        = rows * lineH + 26;  // 26 = header + gap
+        // Position the panel between the START button and the footer
+        const panelTop      = Math.max(H / 2 + 148, H - 44 - panelH);
 
         this.add.text(W / 2, panelTop, `── ACCOMPLISHMENTS  ${unlockedCount} / ${accs.length} ──`, {
-            fontSize: '12px', fill: '#445566', fontFamily: 'monospace', stroke: '#000', strokeThickness: 1
+            fontSize: '13px', fill: '#445566', fontFamily: 'monospace',
+            stroke: '#000', strokeThickness: 1
         }).setOrigin(0.5).setDepth(10);
 
         const colW   = Math.min(220, W / 2 - 12);
-        const startY = panelTop + 20;
+        const startY = panelTop + 22;
         for (let i = 0; i < accs.length; i++) {
             const acc   = accs[i];
             const col   = i % cols;
             const row   = Math.floor(i / cols);
             const x     = W / 2 + (col === 0 ? -colW / 2 : colW / 2);
             const y     = startY + row * lineH;
-            this.add.text(x, y,
-                acc.unlocked ? `✦ ${acc.name}` : `· ???`,
-                { fontSize: '11px', fill: acc.unlocked ? '#ccaa33' : '#2a3c4e',
-                  fontFamily: 'monospace', stroke: '#000', strokeThickness: 1 }
-            ).setOrigin(0.5).setDepth(10);
+            const color = acc.unlocked ? '#ccaa33' : '#2a3c4e';
+            const label = acc.unlocked ? `✦ ${acc.name}` : `· ???`;
+            this.add.text(x, y, label, {
+                fontSize: '12px', fill: color, fontFamily: 'monospace',
+                stroke: '#000', strokeThickness: 1
+            }).setOrigin(0.5).setDepth(10);
         }
+        // ──────────────────────────────────────────────────────────────────────
 
-        // Animate background blobs
+        // Animate background blobs each frame
         this.events.on('update', (time, delta) => {
             const dt = normDt(delta);
             gfx.clear();
             for (const b of decorBlobs) {
-                b.x += b.vx * dt; b.y += b.vy * dt;
-                b.phase += 0.016 * dt;
-                if (b.x < -60)    b.x = W + 60;
-                if (b.x > W + 60) b.x = -60;
-                if (b.y < -60)    b.y = H + 60;
-                if (b.y > H + 60) b.y = -60;
+                b.x += b.vx * dt;  b.y += b.vy * dt;
+                b.phase += b.speed * dt;
+                if (b.x < -60)      b.x = W + 60;
+                if (b.x > W + 60)   b.x = -60;
+                if (b.y < -60)      b.y = H + 60;
+                if (b.y > H + 60)   b.y = -60;
                 const rr = b.r * (1 + Math.sin(b.phase) * 0.07);
-                gfx.fillStyle(b.col, 0.17);
+                gfx.fillStyle(b.col, 0.18);
                 gfx.fillCircle(b.x, b.y, rr * 1.6);
                 gfx.fillStyle(b.col, 0.55);
                 gfx.fillCircle(b.x, b.y, rr);
-                gfx.fillStyle(0xaaffdd, 0.28);
+                gfx.fillStyle(0xaaffdd, 0.3);
                 gfx.fillCircle(b.x - rr * 0.3, b.y - rr * 0.32, rr * 0.28);
             }
         });
@@ -1958,7 +1318,7 @@ class TitleScene extends Phaser.Scene {
 const game = new Phaser.Game({
     type           : Phaser.AUTO,
     backgroundColor: '#080818',
-    scene          : [TitleScene, GameScene, GameOverScene, WinScene],
+    scene          : [TitleScene, GameScene, GameOverScene],
     scale          : {
         mode      : Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
