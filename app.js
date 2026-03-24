@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // StarJelly  –  2D Side-Scrolling Platformer  (Lab Escape)
 // You are an escaped blob experiment – fight your way out of the lab!
-// Controls:  A / ← to move left   D / → to move right
-//            W / ↑ / Space to jump
-//            Click / Tap to shoot a sub-blob toward that point
+// Controls:  Drag / A / ← / D / → to move in any direction
+//            Tap / Click to shoot 3 sub-blobs toward that point
+//            Long-press a group of landed blobs to teleport there
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Physics constants ────────────────────────────────────────────────────────
@@ -16,12 +16,18 @@ const FRICTION    = 0.80;         // strong ground friction for tight platformer
 const AIR_FRICTION= 0.94;         // lighter friction while airborne
 const MAX_SPD     = 9;            // max blob speed
 const GRAVITY     = 0.48;         // gravitational acceleration per norm-frame
-const JUMP_VY     = -12;          // vertical impulse on jump
-const MOVE_FORCE  = 0.65;         // horizontal acceleration force
+const MOVE_FORCE  = 0.65;         // movement acceleration force (all directions)
 
 // ── Projectile constants ─────────────────────────────────────────────────────
 const SHOOT_V    = 14;            // launch speed
 const COLLECT_D  = BLOB_R * 3.5; // distance to auto-collect a landed blob
+const MULTI_SHOT_SPREAD   = 0.12;             // spread angle (rad) between multi-shot blobs
+const TELEPORT_RADIUS     = COLLECT_D * 4;    // world-radius for long-press teleport detection
+const GROUP_PROXIMITY_RAD = COLLECT_D * 2.5;  // radius to consider landed blobs a teleportable group
+
+// ── Input constants ───────────────────────────────────────────────────────────
+const TELEPORT_HOLD_MS  = 500;  // long-press duration before teleport fires
+const DRAG_THRESHOLD    = 18;   // min screen-pixels of movement to begin a drag
 
 // ── Game constants ────────────────────────────────────────────────────────────
 const N_START    = 8;             // starting sub-blobs
@@ -391,53 +397,76 @@ class GameScene extends Phaser.Scene {
             left : kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
             right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
             up   : kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
-            space: kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
             a    : kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
             d    : kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
             w    : kb.addKey(Phaser.Input.Keyboard.KeyCodes.W),
         };
-        this.touchLeft  = false;
-        this.touchRight = false;
-        this.touchJump  = false;
 
-        // Shoot on click/tap
+        // Touch / mouse drag state
+        this._dragStart      = null;   // { x, y, worldX, worldY } screen coords at press
+        this._isDragging     = false;
+        this._dragDir        = { x: 0, y: 0 };
+        this._longPressTimer = null;
+        this._longPressPos   = null;   // world-space position being long-pressed
+        this._pressStartTime = 0;
+
         this.input.on('pointerdown', (p) => {
             if (this.dead) return;
-            // On-screen button regions – handled via _updateTouchButtons
-            const W = this.scale.width;
-            const H = this.scale.height;
-            if (p.y > H * 0.72) return; // ignore lower HUD area taps (buttons)
-            this._shoot(p.worldX, p.worldY);
+            this._dragStart      = { x: p.x, y: p.y, worldX: p.worldX, worldY: p.worldY };
+            this._isDragging     = false;
+            this._dragDir        = { x: 0, y: 0 };
+            this._longPressPos   = { x: p.worldX, y: p.worldY };
+            this._pressStartTime = this.time.now;
+
+            // Start long-press detection (500 ms hold without drag = teleport)
+            this._longPressTimer = this.time.delayedCall(TELEPORT_HOLD_MS, () => {
+                if (!this._isDragging && this._longPressPos) {
+                    this._tryTeleport(this._longPressPos.x, this._longPressPos.y);
+                }
+                this._longPressTimer = null;
+                this._longPressPos   = null;
+            });
         });
 
-        this._createTouchButtons();
-    }
+        this.input.on('pointermove', (p) => {
+            if (!this._dragStart) return;
+            const dx   = p.x - this._dragStart.x;
+            const dy   = p.y - this._dragStart.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > DRAG_THRESHOLD) {
+                if (!this._isDragging) {
+                    this._isDragging   = true;
+                    this._longPressPos = null;
+                    if (this._longPressTimer) {
+                        this._longPressTimer.remove();
+                        this._longPressTimer = null;
+                    }
+                }
+                const len          = dist || 1;
+                this._dragDir      = { x: dx / len, y: dy / len };
+            }
+        });
 
-    _createTouchButtons() {
-        const W = this.scale.width;
-        const H = this.scale.height;
-        const btnStyle = { fontSize: '32px', fill: '#ffffff', fontFamily: 'monospace',
-                           backgroundColor: '#334', padding: { x: 14, y: 8 }, alpha: 0.55 };
+        this.input.on('pointerup', (p) => {
+            const wasDragging = this._isDragging;
 
-        this.btnLeft  = this.add.text(24,       H - 70, '◀', btnStyle).setOrigin(0, 1)
-            .setScrollFactor(0).setDepth(30).setInteractive();
-        this.btnRight = this.add.text(110,      H - 70, '▶', btnStyle).setOrigin(0, 1)
-            .setScrollFactor(0).setDepth(30).setInteractive();
-        this.btnJump  = this.add.text(W - 24,   H - 70, '▲', btnStyle).setOrigin(1, 1)
-            .setScrollFactor(0).setDepth(30).setInteractive();
+            // Cancel any pending long-press
+            if (this._longPressTimer) {
+                this._longPressTimer.remove();
+                this._longPressTimer = null;
+            }
+            this._longPressPos   = null;
+            this._pressStartTime = 0;
 
-        const down = (flag) => () => { this[flag] = true; };
-        const up   = (flag) => () => { this[flag] = false; };
+            // Short tap (not a drag) → shoot blobs
+            if (!wasDragging && this._dragStart) {
+                this._shoot(p.worldX, p.worldY);
+            }
 
-        this.btnLeft.on('pointerdown',  down('touchLeft'));
-        this.btnLeft.on('pointerup',    up('touchLeft'));
-        this.btnLeft.on('pointerout',   up('touchLeft'));
-        this.btnRight.on('pointerdown', down('touchRight'));
-        this.btnRight.on('pointerup',   up('touchRight'));
-        this.btnRight.on('pointerout',  up('touchRight'));
-        this.btnJump.on('pointerdown',  down('touchJump'));
-        this.btnJump.on('pointerup',    up('touchJump'));
-        this.btnJump.on('pointerout',   up('touchJump'));
+            this._dragStart  = null;
+            this._isDragging = false;
+            this._dragDir    = { x: 0, y: 0 };
+        });
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -474,31 +503,73 @@ class GameScene extends Phaser.Scene {
 
     // ── Shooting ──────────────────────────────────────────────────────────────
     _shoot(tx, ty) {
-        if (this.dead || this.blobs.length <= 2) return;
+        if (this.dead) return;
+        const shootCount = Math.min(3, this.blobs.length - 2);
+        if (shootCount <= 0) return;
+
         const c   = this._center();
         const dx  = tx - c.x, dy = ty - c.y;
         const len = Math.hypot(dx, dy) || 1;
 
-        // Pick the blob most aligned with the shoot direction
-        let best = null, bestDot = -Infinity;
-        for (const b of this.blobs) {
-            const dot = (b.x - c.x) * dx / len + (b.y - c.y) * dy / len;
-            if (dot > bestDot) { bestDot = dot; best = b; }
-        }
-        if (!best) return;
+        for (let s = 0; s < shootCount; s++) {
+            // Pick the blob most aligned with the shoot direction
+            let best = null, bestDot = -Infinity;
+            for (const b of this.blobs) {
+                const dot = (b.x - c.x) * dx / len + (b.y - c.y) * dy / len;
+                if (dot > bestDot) { bestDot = dot; best = b; }
+            }
+            if (!best) break;
 
-        this.blobs = this.blobs.filter(b => b !== best);
-        this.projs.push({
-            x: best.x, y: best.y,
-            vx: dx / len * SHOOT_V + best.vx,
-            vy: dy / len * SHOOT_V + best.vy - 2,  // small upward boost for arc feel
-            radius: BLOB_R,
-            trail : [],
-            phase : best.phase,
-            pSpeed: best.pSpeed,
-            onGround: false,
-            landed  : false,
-        });
+            this.blobs = this.blobs.filter(b => b !== best);
+
+            // Small spread so blobs land close together as a group
+            const spread = (s - (shootCount - 1) / 2) * MULTI_SHOT_SPREAD;
+            const cs = Math.cos(spread), ss = Math.sin(spread);
+            const vx = (dx / len * cs - dy / len * ss) * SHOOT_V + best.vx;
+            const vy = (dx / len * ss + dy / len * cs) * SHOOT_V + best.vy - 2;
+
+            this.projs.push({
+                x: best.x, y: best.y,
+                vx, vy,
+                radius: BLOB_R,
+                trail : [],
+                phase : best.phase,
+                pSpeed: best.pSpeed,
+                onGround: false,
+                landed  : false,
+            });
+        }
+    }
+
+    // ── Teleport ──────────────────────────────────────────────────────────────
+    _tryTeleport(wx, wy) {
+        // Find landed blobs near the pressed world position
+        const nearby = this.projs.filter(
+            p => p.landed && Math.hypot(p.x - wx, p.y - wy) < TELEPORT_RADIUS
+        );
+        if (nearby.length === 0) return;
+
+        // Centre of the target group
+        const gx = nearby.reduce((s, p) => s + p.x, 0) / nearby.length;
+        const gy = nearby.reduce((s, p) => s + p.y, 0) / nearby.length;
+
+        // Teleport all player blobs, preserving their offsets relative to cluster centre
+        const c = this._center();
+        for (const b of this.blobs) {
+            b.x  = gx + (b.x - c.x);
+            b.y  = gy + (b.y - c.y);
+            b.vx *= 0.1;
+            b.vy *= 0.1;
+        }
+
+        // Absorb the nearby landed blobs into the cluster
+        const nearbySet = new Set(nearby);
+        this.projs = this.projs.filter(p => !nearbySet.has(p));
+        for (const p of nearby) {
+            this.blobs.push(this._makeBlob(p.x, p.y, 0, 0));
+        }
+
+        this.cameras.main.shake(60, 0.008);
     }
 
     // ── Accomplishments ────────────────────────────────────────────────────────
@@ -594,29 +665,26 @@ class GameScene extends Phaser.Scene {
             }
         }
 
-        // ─── Input: horizontal movement + jump ───
-        // isDown already covers the initial press frame, so JustDown is not needed for movement
-        const movingLeft  = this.keys.left.isDown  || this.keys.a.isDown  || this.touchLeft;
-        const movingRight = this.keys.right.isDown || this.keys.d.isDown  || this.touchRight;
-        // Jump uses JustDown to fire only once per key press (no auto-repeat)
-        const wantsJump   = Phaser.Input.Keyboard.JustDown(this.keys.up)    ||
-                            Phaser.Input.Keyboard.JustDown(this.keys.w)     ||
-                            Phaser.Input.Keyboard.JustDown(this.keys.space) || this.touchJump;
-
-        const grounded = this._isGrounded();
-
-        if (wantsJump && grounded) {
-            for (const b of this.blobs) b.vy = JUMP_VY;
-            this.touchJump = false;
-        }
+        // ─── Input: drag-to-slide movement ───
+        // Keyboard arrows / WASD apply directional force; touch drag does the same.
+        const movingLeft  = this.keys.left.isDown || this.keys.a.isDown;
+        const movingRight = this.keys.right.isDown || this.keys.d.isDown;
+        const movingUp    = this.keys.up.isDown || this.keys.w.isDown;
 
         for (const b of this.blobs) {
             // Gravity
             b.vy += GRAVITY * dt;
 
-            // Horizontal input
+            // Keyboard directional input
             if (movingLeft)  b.vx -= MOVE_FORCE * dt;
             if (movingRight) b.vx += MOVE_FORCE * dt;
+            if (movingUp)    b.vy -= MOVE_FORCE * dt;
+
+            // Touch drag input (applies force in drag direction)
+            if (this._isDragging) {
+                b.vx += this._dragDir.x * MOVE_FORCE * dt;
+                b.vy += this._dragDir.y * MOVE_FORCE * dt;
+            }
 
             // Friction
             const fr = b.onGround ? FRICTION : AIR_FRICTION;
@@ -1075,6 +1143,7 @@ class GameScene extends Phaser.Scene {
         this._drawEnemies();
         this._drawEnemyProjs();
         this._drawExit();
+        this._drawTouchFeedback();
     }
 
     _drawBg() {
@@ -1265,6 +1334,19 @@ class GameScene extends Phaser.Scene {
     _drawLandedBlobs() {
         // Landed projectile blobs waiting to be collected
         const g = this.gProj;
+
+        // Identify blobs that are part of a teleportable group (>= 1 sibling within range)
+        const landed = this.projs.filter(p => p.landed);
+        const inGroup = new Set();
+        for (let i = 0; i < landed.length; i++) {
+            for (let j = i + 1; j < landed.length; j++) {
+                if (Math.hypot(landed[i].x - landed[j].x, landed[i].y - landed[j].y) < GROUP_PROXIMITY_RAD) {
+                    inGroup.add(landed[i]);
+                    inGroup.add(landed[j]);
+                }
+            }
+        }
+
         for (const p of this.projs) {
             if (!p.landed) continue;
             // Dim version – sitting on the ground
@@ -1277,6 +1359,13 @@ class GameScene extends Phaser.Scene {
             const ring = 1 + 0.3 * Math.sin(p.phase * 2);
             g.lineStyle(1.5, C_PROJ, 0.5 * ring);
             g.strokeCircle(p.x, p.y, p.radius * 2.0 * ring);
+
+            // Extra outer ring for teleportable groups
+            if (inGroup.has(p)) {
+                const pulse = 0.5 + 0.5 * Math.sin(p.phase * 1.5);
+                g.lineStyle(2, 0x00ffcc, 0.35 + 0.25 * pulse);
+                g.strokeCircle(p.x, p.y, p.radius * 3.2);
+            }
         }
     }
 
@@ -1434,6 +1523,47 @@ class GameScene extends Phaser.Scene {
         // (drawn as simple line pattern, not text, to keep in world space)
     }
 
+    _drawTouchFeedback() {
+        // Draw a long-press progress ring in world space while the pointer is held still
+        if (!this._dragStart || this._isDragging || this._pressStartTime === 0) return;
+
+        const elapsed = this.time.now - this._pressStartTime;
+        const pct     = Math.min(elapsed / TELEPORT_HOLD_MS, 1.0);
+        if (pct < 0.1) return;
+
+        const g  = this.gFx;
+        const wx = this._dragStart.worldX;
+        const wy = this._dragStart.worldY;
+        const r  = BLOB_R * 3.8;
+
+        // Check if there are landed blobs nearby (teleport target)
+        const hasTarget = this.projs.some(
+            p => p.landed && Math.hypot(p.x - wx, p.y - wy) < TELEPORT_RADIUS
+        );
+        const ringCol = hasTarget ? 0x00ffcc : 0x88bbcc;
+
+        // Background circle
+        g.lineStyle(2, ringCol, 0.18);
+        g.strokeCircle(wx, wy, r);
+
+        // Progress arc (approximate with line segments)
+        const segments  = Math.ceil(pct * 36);
+        const startAngle = -Math.PI / 2;
+        g.lineStyle(3, ringCol, 0.85);
+        for (let i = 0; i < segments; i++) {
+            const a1 = startAngle + (Math.PI * 2 * pct) * i / segments;
+            const a2 = startAngle + (Math.PI * 2 * pct) * (i + 1) / segments;
+            g.lineBetween(
+                wx + Math.cos(a1) * r, wy + Math.sin(a1) * r,
+                wx + Math.cos(a2) * r, wy + Math.sin(a2) * r
+            );
+        }
+
+        // Bright centre dot
+        g.fillStyle(ringCol, 0.5 * pct);
+        g.fillCircle(wx, wy, BLOB_R * 0.7);
+    }
+
     // ── UI ────────────────────────────────────────────────────────────────────
     _createUI() {
         const D = 20;
@@ -1455,7 +1585,7 @@ class GameScene extends Phaser.Scene {
             fontStyle: 'bold', stroke: '#000', strokeThickness: 3
         }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(D);
 
-        this.txtHint = this.add.text(W / 2, H - 105, 'A/D or ◀▶ to move  ·  W/Space/▲ to jump  ·  Click/Tap to shoot', {
+        this.txtHint = this.add.text(W / 2, H - 105, 'Drag to slide  ·  Tap to shoot blobs  ·  Long-press landed blobs to teleport', {
             fontSize: '13px', fill: '#99aabb', fontFamily: 'monospace'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(D);
         this.time.delayedCall(6000, () =>
@@ -1465,9 +1595,6 @@ class GameScene extends Phaser.Scene {
         this.scale.on('resize', (gs) => {
             if (this.txtLevel)  this.txtLevel.setX(gs.width / 2);
             if (this.txtHint)   this.txtHint.setX(gs.width / 2).setY(gs.height - 105);
-            if (this.btnLeft)   this.btnLeft.setY(gs.height - 70);
-            if (this.btnRight)  this.btnRight.setY(gs.height - 70);
-            if (this.btnJump)   { this.btnJump.setX(gs.width - 24).setY(gs.height - 70); }
         });
     }
 
@@ -1689,7 +1816,7 @@ class TitleScene extends Phaser.Scene {
         }).setOrigin(0.5).setDepth(10);
 
         this.add.text(W / 2, H / 2 + 32,
-            'A / ← → / D  to move   ·   W / ↑ / Space  to jump   ·   Click / Tap  to shoot',
+            'Drag to slide  ·  Tap to shoot blobs  ·  Long-press landed blobs to teleport',
             { fontSize: '13px', fill: '#556677', fontFamily: 'monospace' }
         ).setOrigin(0.5).setDepth(10);
 
