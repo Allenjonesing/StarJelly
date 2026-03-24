@@ -1,17 +1,16 @@
-# ★ StarJelly
+# ★ StarJelly – Lab Escape
 
-A browser-based jelly-blob physics survival game built with [Phaser 3](https://phaser.io/).
+A browser-based 2D **side-scrolling platformer** built with [Phaser 3](https://phaser.io/).
 
 ---
 
 ## Concept
 
-You are **StarJelly** – a conglomerate blob made up of many smaller jelly sub-blobs.
-Your health **is** your blob count. Lose all your blobs and it's game over.
+You are **StarJelly** – a sentient jelly-blob experiment that broke free inside a research
+laboratory. Fight your way through scientists and security guards, collect jelly vats to grow
+stronger, and reach the exit on each level to escape!
 
-Enemies approach in waves and will try to eat your blobs. Fight back by
-shooting pieces of yourself at them. Missed shots always return to you.
-Collect the glowing cyan blobs that occasionally appear to grow your cluster.
+Your health **is** your blob count. Lose all your sub-blobs and it's game over.
 
 ---
 
@@ -19,24 +18,56 @@ Collect the glowing cyan blobs that occasionally appear to grow your cluster.
 
 | Input | Action |
 |-------|--------|
-| **Hold & drag** anywhere | Slide the whole jelly cluster in that direction |
-| **Tap / click** | Launch the nearest sub-blob toward that point to attack |
-
-> Works on both desktop (mouse) and mobile (touch).
+| **A / ←** | Move left |
+| **D / →** | Move right |
+| **W / ↑ / Space** | Jump (while on ground) |
+| **Click / Tap** | Shoot the nearest sub-blob toward that point |
+| **On-screen ◀ ▶ ▲** | Touch controls for mobile |
 
 ---
 
 ## Gameplay
 
-- You start with **10 sub-blobs**.
-- Sub-blobs are held together by a magnetic spring force – they wobble and squish like real jelly.
-- **Shooting** temporarily detaches one blob and fires it as a projectile.  
-  - If it **hits an enemy** the enemy takes damage, the blob returns to you immediately.  
-  - If it **misses**, the blob bounces around for ~2 seconds then pulls back to the cluster.
-- **Enemies** (red blobs) appear in waves. They chase your cluster; if one touches a sub-blob it eats it (**-1 health**). Each enemy gets a short cool-down after eating so you have a chance to shoot it.
-- **Cyan pickup blobs** appear periodically. Touch them with your cluster to absorb an extra sub-blob (+1 health, +25 score).
-- Score: **+10** per hit, **+50** per kill, **+25** per pickup collected.
-- Enemy waves get larger and faster as the wave number climbs.
+- You start with **8 sub-blobs** forming a connected jelly cluster.
+- Sub-blobs are held together by spring forces – they wobble and squish like real jelly.
+- **Gravity** pulls the cluster down; you can jump between platforms and climb staircases.
+- **Shooting** detaches one blob and fires it in a ballistic arc toward your target.  
+  - The projectile **falls with gravity** and lands on the ground/platform.  
+  - Landed blobs **do not return automatically** – walk over them to collect.  
+  - A hit enemy takes damage; killing it awards points.
+- **Enemies:**
+  - 🥼 **Scientist** – patrols, shoots darts. 2 HP.
+  - 🪖 **Guard** – tougher, faster shots. 3 HP.
+  - 🔥 **Flamethrower** (Level 3) – shoots fire cones that **destroy blobs instantly**. 4 HP. Attack from behind or above!
+- **Jelly Vats** (green cylinders) – touch them to grow your cluster by 3 blobs.
+- **Water Puddles** – walk through to convert them into 2 extra blobs.
+- **Fire Hazards** – avoid static fire pools in Level 3; they destroy blobs on contact.
+- Reach the **glowing green EXIT** door at the end of each level to advance.
+
+### Scoring
+| Event | Points |
+|-------|--------|
+| Hit an enemy | +10 |
+| Kill an enemy | +50 |
+| Collect a jelly vat | +30 |
+| Convert a water puddle | +20 |
+
+---
+
+## Levels
+
+| # | Name | Enemies | Special |
+|---|------|---------|---------|
+| 1 | Specimen Chamber | Scientists | Tutorial-friendly layout |
+| 2 | Research Corridor | Scientists + Guards | Staircases, water puddles |
+| 3 | Security Wing | Guards + Flamethrowers | Fire hazards, toughest layout |
+
+---
+
+## Accomplishments
+
+There are **11 hidden accomplishments** to unlock — from "First Blood" (first kill) to "Free at Last"
+(escape the lab). They are tracked in `localStorage` and shown on the title screen and game-over screen.
 
 ---
 
@@ -45,16 +76,12 @@ Collect the glowing cyan blobs that occasionally appear to grow your cluster.
 The game is a static web app — no build step required.
 
 ```bash
-# Install a simple static server (first time only)
-npm install
-
-# Serve the project (use any static server, e.g. http-server or live-server)
+# Serve the project with any static server
 npx http-server . -p 8080
 # then open http://localhost:8080
 ```
 
-Or just open `index.html` directly in a browser that allows local file scripts
-(Chrome/Edge work fine with `--allow-file-access-from-files`).
+Or open `index.html` directly in a browser (Chrome/Edge work fine).
 
 ---
 
@@ -63,8 +90,8 @@ Or just open `index.html` directly in a browser that allows local file scripts
 | Layer | Technology |
 |-------|-----------|
 | Game framework | [Phaser 3](https://phaser.io/) (`lib/phaser.min.js`) |
-| Rendering | Phaser `Graphics` (procedural, no external sprites needed) |
-| Physics | Custom spring/repulsion + velocity integration (no Box2D) |
+| Rendering | Phaser `Graphics` (procedural – no external sprites needed) |
+| Physics | Custom spring/repulsion + gravity + platform collision |
 | Platform | Runs entirely in the browser, no server required |
 
 ---
@@ -74,7 +101,7 @@ Or just open `index.html` directly in a browser that allows local file scripts
 ```
 StarJelly/
 ├── index.html        # Entry point
-├── app.js            # All game logic (TitleScene, GameScene, GameOverScene)
+├── app.js            # All game logic (TitleScene, GameScene, GameOverScene, WinScene)
 ├── styles.css        # Minimal full-screen canvas styles
 ├── lib/
 │   └── phaser.min.js # Phaser 3 engine (bundled)
