@@ -595,8 +595,10 @@ class GameScene extends Phaser.Scene {
         }
 
         // ─── Input: horizontal movement + jump ───
-        const movingLeft  = Phaser.Input.Keyboard.JustDown(this.keys.left)  || this.keys.left.isDown  || this.touchLeft;
-        const movingRight = Phaser.Input.Keyboard.JustDown(this.keys.right) || this.keys.right.isDown || this.touchRight;
+        // isDown already covers the initial press frame, so JustDown is not needed for movement
+        const movingLeft  = this.keys.left.isDown  || this.keys.a.isDown  || this.touchLeft;
+        const movingRight = this.keys.right.isDown || this.keys.d.isDown  || this.touchRight;
+        // Jump uses JustDown to fire only once per key press (no auto-repeat)
         const wantsJump   = Phaser.Input.Keyboard.JustDown(this.keys.up)    ||
                             Phaser.Input.Keyboard.JustDown(this.keys.w)     ||
                             Phaser.Input.Keyboard.JustDown(this.keys.space) || this.touchJump;
@@ -886,8 +888,9 @@ class GameScene extends Phaser.Scene {
 
     // ── Collectibles ──────────────────────────────────────────────────────────
     _collectLandedBlobs() {
-        // Collect landed blobs when the cluster gets close enough
-        // Iterate in reverse order so we can splice by index without offset issues
+        // Collect landed blobs when the cluster gets close enough.
+        // Iterating in reverse order (high index → low) means toCollect is already
+        // in descending order, so splice() calls don't shift any remaining indices.
         const toCollect = [];
         for (let i = this.projs.length - 1; i >= 0; i--) {
             const p = this.projs[i];
@@ -984,9 +987,9 @@ class GameScene extends Phaser.Scene {
                 })
             );
         } else {
-            // Next level
-            if (this.levelIdx + 1 >= 1) this._tryUnlock('level_2');
-            if (this.levelIdx + 1 >= 2) this._tryUnlock('level_3');
+            // Next level – unlock the accomplishment for the level we're arriving at
+            if (this.levelIdx + 1 === 1) this._tryUnlock('level_2');
+            if (this.levelIdx + 1 === 2) this._tryUnlock('level_3');
 
             this.cameras.main.flash(600, 0, 255, 100);
             this.time.delayedCall(700, () => {
@@ -1453,7 +1456,7 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(D);
 
         this.txtHint = this.add.text(W / 2, H - 105, 'A/D or ◀▶ to move  ·  W/Space/▲ to jump  ·  Click/Tap to shoot', {
-            fontSize: '13px', fill: '#667788', fontFamily: 'monospace'
+            fontSize: '13px', fill: '#99aabb', fontFamily: 'monospace'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(D);
         this.time.delayedCall(6000, () =>
             this.tweens.add({ targets: this.txtHint, alpha: 0, duration: 1500 })
