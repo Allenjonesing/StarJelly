@@ -20,7 +20,9 @@ const GRAVITY     = 0.92;         // heavy gravity – blobs cannot lift into th
 const MOVE_FORCE  = 0.65;         // horizontal movement acceleration force
 
 // ── Projectile constants ─────────────────────────────────────────────────────
-const SHOOT_V    = 14;            // launch speed
+const SHOOT_V        = 16;        // minimum launch speed (close click)
+const SHOOT_V_MAX    = 32;        // maximum launch speed (distant click)
+const SHOOT_DIST_REF = 300;       // click distance (px) that reaches max launch speed
 const COLLECT_D  = BLOB_R * 3.5; // distance to auto-collect a landed blob
 const TAKE_CONTROL_RADIUS     = COLLECT_D * 4;    // world-radius for long-press take-control detection
 const TAKE_CONTROL_GROUP_RAD  = COLLECT_D * 2.5;  // radius to consider landed blobs a take-control group
@@ -592,8 +594,9 @@ class GameScene extends Phaser.Scene {
 
         this.blobs = this.blobs.filter(b => b !== best);
 
-        const vx = dx / len * SHOOT_V + best.vx;
-        const vy = dy / len * SHOOT_V + best.vy;
+        const shootV = SHOOT_V + (SHOOT_V_MAX - SHOOT_V) * Math.min(len / SHOOT_DIST_REF, 1);
+        const vx = dx / len * shootV + best.vx;
+        const vy = dy / len * shootV + best.vy;
 
         this.projs.push({
             x: best.x, y: best.y,
