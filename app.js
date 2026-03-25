@@ -1,9 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // StarJelly  –  2D Side-Scrolling Platformer  (Lab Escape)
 // You are an escaped blob experiment – fight your way out of the lab!
-// Controls:  Drag / A / ← / D / → to move in any direction
-//            Tap / Click to shoot 3 sub-blobs toward that point
-//            Long-press a group of landed blobs to teleport there
+// Controls:  Drag / A / ← / D / → to move horizontally
+//            Tap / Click to shoot 1 sub-blob toward that point
+//            Long-press a group of landed blobs to take control of them
+//            (your current blobs are left behind when you take control)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Physics constants ────────────────────────────────────────────────────────
@@ -15,15 +16,14 @@ const REPEL_D     = BLOB_R * 1.8; // repulsion kicks in below this distance
 const FRICTION    = 0.80;         // strong ground friction for tight platformer feel
 const AIR_FRICTION= 0.94;         // lighter friction while airborne
 const MAX_SPD     = 9;            // max blob speed
-const GRAVITY     = 0.48;         // gravitational acceleration per norm-frame
-const MOVE_FORCE  = 0.65;         // movement acceleration force (all directions)
+const GRAVITY     = 0.92;         // heavy gravity – blobs cannot lift into the air
+const MOVE_FORCE  = 0.65;         // horizontal movement acceleration force
 
 // ── Projectile constants ─────────────────────────────────────────────────────
 const SHOOT_V    = 14;            // launch speed
 const COLLECT_D  = BLOB_R * 3.5; // distance to auto-collect a landed blob
-const MULTI_SHOT_SPREAD   = 0.12;             // spread angle (rad) between multi-shot blobs
-const TELEPORT_RADIUS     = COLLECT_D * 4;    // world-radius for long-press teleport detection
-const GROUP_PROXIMITY_RAD = COLLECT_D * 2.5;  // radius to consider landed blobs a teleportable group
+const TAKE_CONTROL_RADIUS     = COLLECT_D * 4;    // world-radius for long-press take-control detection
+const TAKE_CONTROL_GROUP_RAD  = COLLECT_D * 2.5;  // radius to consider landed blobs a take-control group
 
 // ── Input constants ───────────────────────────────────────────────────────────
 const TELEPORT_HOLD_MS  = 500;  // long-press duration before teleport fires
@@ -56,15 +56,18 @@ function buildLevels(H) {
         // ── Level 1: Specimen Chamber ─────────────────────────────────────────
         {
             title    : 'Level 1 – Specimen Chamber',
-            worldW   : 2500,
+            worldW   : 3800,
             worldH   : H,
             bgColor  : '#0e1520',
             // Solid rectangles (full collision from all sides)
             solids   : [
-                { x:0,    y:G,   w:2500, h:H-G+4 },  // ground
+                { x:0,    y:G,   w:3800, h:H-G+4 },  // ground
                 { x:0,    y:0,   w:12,   h:H     },   // left wall
-                { x:2488, y:0,   w:12,   h:H     },   // right wall
-                { x:0,    y:0,   w:2500, h:12    },   // ceiling
+                { x:3788, y:0,   w:12,   h:H     },   // right wall
+                { x:0,    y:0,   w:3800, h:12    },   // ceiling
+                // mid-level divider walls
+                { x:1400, y:G-170, w:14, h:170 },
+                { x:2650, y:G-145, w:14, h:145 },
             ],
             // One-way platforms (land on top, jump through from below)
             platforms: [
@@ -74,9 +77,16 @@ function buildLevels(H) {
                 { x:1330, y:G-235, w:270, h:14 },
                 { x:1680, y:G-140, w:240, h:14 },
                 { x:2000, y:G-215, w:190, h:14 },
+                // extended section
+                { x:2250, y:G-130, w:200, h:14 },
+                { x:2550, y:G-200, w:170, h:14 },
+                { x:2820, y:G-120, w:220, h:14 },
+                { x:3100, y:G-185, w:180, h:14 },
+                { x:3380, y:G-240, w:160, h:14 },
+                { x:3560, y:G-120, w:180, h:14 },
             ],
             playerStart: { x:70,   y:G-40 },
-            exit       : { x:2410, y:G-130, w:65, h:130 },
+            exit       : { x:3695, y:G-130, w:65, h:130 },
             enemies    : [
                 { x:400,  y:G-20, type:'scientist', dir: 1 },
                 { x:780,  y:G-20, type:'scientist', dir:-1 },
@@ -84,30 +94,42 @@ function buildLevels(H) {
                 { x:1540, y:G-20, type:'scientist', dir:-1 },
                 { x:1900, y:G-20, type:'scientist', dir: 1 },
                 { x:2250, y:G-20, type:'scientist', dir:-1 },
+                // extended section enemies
+                { x:2500, y:G-20, type:'guard',     dir: 1 },
+                { x:2750, y:G-20, type:'scientist', dir:-1 },
+                { x:3000, y:G-20, type:'guard',     dir: 1 },
+                { x:3250, y:G-20, type:'scientist', dir:-1 },
+                { x:3500, y:G-20, type:'guard',     dir: 1 },
             ],
             vats  : [
                 { x:530,  y:G-28 },
                 { x:1090, y:G-28 },
                 { x:1820, y:G-28 },
+                { x:2450, y:G-28 },
+                { x:3150, y:G-28 },
             ],
-            waters: [],
+            waters: [
+                { x:2080, y:G-14, w:120, h:14 },
+                { x:3310, y:G-14, w:100, h:14 },
+            ],
             fires : [],
         },
 
         // ── Level 2: Research Corridor ────────────────────────────────────────
         {
             title    : 'Level 2 – Research Corridor',
-            worldW   : 3700,
+            worldW   : 5200,
             worldH   : H,
             bgColor  : '#0d1820',
             solids   : [
-                { x:0,    y:G,   w:3700, h:H-G+4 },
+                { x:0,    y:G,   w:5200, h:H-G+4 },
                 { x:0,    y:0,   w:12,   h:H     },
-                { x:3688, y:0,   w:12,   h:H     },
-                { x:0,    y:0,   w:3700, h:12    },
+                { x:5188, y:0,   w:12,   h:H     },
+                { x:0,    y:0,   w:5200, h:12    },
                 // internal barriers / raised dividers
                 { x:1050, y:G-190, w:14, h:190 },
                 { x:2300, y:G-200, w:14, h:200 },
+                { x:3700, y:G-185, w:14, h:185 },
             ],
             platforms: [
                 { x:160,  y:G-125, w:250, h:14 },
@@ -124,9 +146,19 @@ function buildLevels(H) {
                 { x:2650, y:G-120, w:220, h:14 },
                 { x:3000, y:G-205, w:310, h:14 },
                 { x:3380, y:G-140, w:210, h:14 },
+                // extended section
+                { x:3600, y:G-230, w:180, h:14 },
+                { x:3870, y:G-145, w:220, h:14 },
+                // second staircase
+                { x:4100, y:G-155, w:85,  h:14 },
+                { x:4185, y:G-205, w:85,  h:14 },
+                { x:4270, y:G-255, w:85,  h:14 },
+                { x:4450, y:G-270, w:280, h:14 },
+                { x:4800, y:G-160, w:200, h:14 },
+                { x:5000, y:G-120, w:160, h:14 },
             ],
             playerStart: { x:70,   y:G-40 },
-            exit       : { x:3605, y:G-130, w:65, h:130 },
+            exit       : { x:5105, y:G-130, w:65, h:130 },
             enemies    : [
                 { x:300,  y:G-20, type:'scientist', dir: 1 },
                 { x:700,  y:G-20, type:'guard',     dir:-1 },
@@ -137,34 +169,48 @@ function buildLevels(H) {
                 { x:2750, y:G-20, type:'scientist', dir: 1 },
                 { x:3100, y:G-20, type:'guard',     dir: 1 },
                 { x:3450, y:G-20, type:'scientist', dir:-1 },
+                // extended section
+                { x:3720, y:G-20, type:'guard',     dir: 1 },
+                { x:3950, y:G-20, type:'scientist', dir:-1 },
+                { x:4200, y:G-20, type:'guard',     dir: 1 },
+                { x:4500, y:G-20, type:'flamethrower', dir:-1 },
+                { x:4750, y:G-20, type:'guard',     dir: 1 },
+                { x:5000, y:G-20, type:'scientist', dir:-1 },
             ],
             vats  : [
                 { x:490,  y:G-28 },
                 { x:1050, y:G-28 },
                 { x:1850, y:G-28 },
                 { x:2580, y:G-28 },
+                { x:3600, y:G-28 },
+                { x:4350, y:G-28 },
             ],
             waters: [
                 { x:1630, y:G-14, w:140, h:14 },
                 { x:2940, y:G-14, w:110, h:14 },
+                { x:4020, y:G-14, w:130, h:14 },
             ],
-            fires : [],
+            fires : [
+                { x:3200, y:G-18, w:70, h:18 },
+                { x:4640, y:G-18, w:80, h:18 },
+            ],
         },
 
         // ── Level 3: Security Wing ────────────────────────────────────────────
         {
             title    : 'Level 3 – Security Wing',
-            worldW   : 4100,
+            worldW   : 5800,
             worldH   : H,
             bgColor  : '#100d18',
             solids   : [
-                { x:0,    y:G,   w:4100, h:H-G+4 },
+                { x:0,    y:G,   w:5800, h:H-G+4 },
                 { x:0,    y:0,   w:12,   h:H     },
-                { x:4088, y:0,   w:12,   h:H     },
-                { x:0,    y:0,   w:4100, h:12    },
+                { x:5788, y:0,   w:12,   h:H     },
+                { x:0,    y:0,   w:5800, h:12    },
                 { x:950,  y:G-155, w:14, h:155 },
                 { x:2150, y:G-175, w:14, h:175 },
                 { x:3300, y:G-160, w:14, h:160 },
+                { x:4400, y:G-180, w:14, h:180 },
             ],
             platforms: [
                 { x:200,  y:G-135, w:250, h:14 },
@@ -182,9 +228,20 @@ function buildLevels(H) {
                 { x:3100, y:G-255, w:310, h:14 },
                 { x:3520, y:G-175, w:290, h:14 },
                 { x:3880, y:G-135, w:155, h:14 },
+                // extended gauntlet section
+                { x:4100, y:G-210, w:200, h:14 },
+                { x:4380, y:G-145, w:170, h:14 },
+                // second staircase
+                { x:4580, y:G-160, w:80,  h:14 },
+                { x:4660, y:G-215, w:80,  h:14 },
+                { x:4740, y:G-270, w:80,  h:14 },
+                // final run
+                { x:4920, y:G-290, w:300, h:14 },
+                { x:5280, y:G-195, w:200, h:14 },
+                { x:5500, y:G-130, w:250, h:14 },
             ],
             playerStart: { x:70,   y:G-40 },
-            exit       : { x:4005, y:G-130, w:65, h:130 },
+            exit       : { x:5705, y:G-130, w:65, h:130 },
             enemies    : [
                 { x:310,  y:G-20, type:'scientist',   dir: 1 },
                 { x:650,  y:G-20, type:'guard',       dir:-1 },
@@ -197,6 +254,15 @@ function buildLevels(H) {
                 { x:3130, y:G-20, type:'guard',       dir: 1 },
                 { x:3430, y:G-20, type:'flamethrower',dir:-1 },
                 { x:3720, y:G-20, type:'guard',       dir: 1 },
+                // extended gauntlet enemies
+                { x:3950, y:G-20, type:'flamethrower',dir:-1 },
+                { x:4200, y:G-20, type:'guard',       dir: 1 },
+                { x:4500, y:G-20, type:'flamethrower',dir:-1 },
+                { x:4780, y:G-20, type:'guard',       dir: 1 },
+                { x:5000, y:G-20, type:'flamethrower',dir:-1 },
+                { x:5200, y:G-20, type:'guard',       dir: 1 },
+                { x:5450, y:G-20, type:'flamethrower',dir:-1 },
+                { x:5650, y:G-20, type:'guard',       dir: 1 },
             ],
             vats  : [
                 { x:470,  y:G-28 },
@@ -204,15 +270,22 @@ function buildLevels(H) {
                 { x:2260, y:G-28 },
                 { x:3020, y:G-28 },
                 { x:3660, y:G-28 },
+                { x:4300, y:G-28 },
+                { x:5100, y:G-28 },
             ],
             waters: [
                 { x:780,  y:G-14, w:120, h:14 },
                 { x:1970, y:G-14, w:100, h:14 },
                 { x:3010, y:G-14, w:90,  h:14 },
+                { x:4050, y:G-14, w:110, h:14 },
+                { x:5350, y:G-14, w:120, h:14 },
             ],
             fires : [
                 { x:1590, y:G-18, w:80, h:18 },
                 { x:2620, y:G-18, w:70, h:18 },
+                { x:3820, y:G-18, w:80, h:18 },
+                { x:4870, y:G-18, w:90, h:18 },
+                { x:5560, y:G-18, w:75, h:18 },
             ],
         },
     ];
@@ -396,10 +469,8 @@ class GameScene extends Phaser.Scene {
         this.keys = {
             left : kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
             right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-            up   : kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
             a    : kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
             d    : kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-            w    : kb.addKey(Phaser.Input.Keyboard.KeyCodes.W),
         };
 
         // Touch / mouse drag state
@@ -421,7 +492,7 @@ class GameScene extends Phaser.Scene {
             // Start long-press detection (500 ms hold without drag = teleport)
             this._longPressTimer = this.time.delayedCall(TELEPORT_HOLD_MS, () => {
                 if (!this._isDragging && this._longPressPos) {
-                    this._tryTeleport(this._longPressPos.x, this._longPressPos.y);
+                    this._tryTakeControl(this._longPressPos.x, this._longPressPos.y);
                 }
                 this._longPressTimer = null;
                 this._longPressPos   = null;
@@ -504,70 +575,66 @@ class GameScene extends Phaser.Scene {
     // ── Shooting ──────────────────────────────────────────────────────────────
     _shoot(tx, ty) {
         if (this.dead) return;
-        const shootCount = Math.min(3, this.blobs.length - 2);
-        if (shootCount <= 0) return;
+        // Only shoot one blob at a time
+        if (this.blobs.length <= 2) return;
 
         const c   = this._center();
         const dx  = tx - c.x, dy = ty - c.y;
         const len = Math.hypot(dx, dy) || 1;
 
-        for (let s = 0; s < shootCount; s++) {
-            // Pick the blob most aligned with the shoot direction
-            let best = null, bestDot = -Infinity;
-            for (const b of this.blobs) {
-                const dot = (b.x - c.x) * dx / len + (b.y - c.y) * dy / len;
-                if (dot > bestDot) { bestDot = dot; best = b; }
-            }
-            if (!best) break;
-
-            this.blobs = this.blobs.filter(b => b !== best);
-
-            // Small spread so blobs land close together as a group
-            const spread = (s - (shootCount - 1) / 2) * MULTI_SHOT_SPREAD;
-            const cs = Math.cos(spread), ss = Math.sin(spread);
-            const vx = (dx / len * cs - dy / len * ss) * SHOOT_V + best.vx;
-            const vy = (dx / len * ss + dy / len * cs) * SHOOT_V + best.vy - 2;
-
-            this.projs.push({
-                x: best.x, y: best.y,
-                vx, vy,
-                radius: BLOB_R,
-                trail : [],
-                phase : best.phase,
-                pSpeed: best.pSpeed,
-                onGround: false,
-                landed  : false,
-            });
+        // Pick the blob most aligned with the shoot direction
+        let best = null, bestDot = -Infinity;
+        for (const b of this.blobs) {
+            const dot = (b.x - c.x) * dx / len + (b.y - c.y) * dy / len;
+            if (dot > bestDot) { bestDot = dot; best = b; }
         }
+        if (!best) return;
+
+        this.blobs = this.blobs.filter(b => b !== best);
+
+        const vx = dx / len * SHOOT_V + best.vx;
+        const vy = dy / len * SHOOT_V + best.vy;
+
+        this.projs.push({
+            x: best.x, y: best.y,
+            vx, vy,
+            radius: BLOB_R,
+            trail : [],
+            phase : best.phase,
+            pSpeed: best.pSpeed,
+            onGround: false,
+            landed  : false,
+        });
     }
 
-    // ── Teleport ──────────────────────────────────────────────────────────────
-    _tryTeleport(wx, wy) {
+    // ── Take Control ─────────────────────────────────────────────────────────
+    // Long-pressing a group of landed blobs abandons the current cluster in place
+    // and gives the player control of the target group instead.
+    _tryTakeControl(wx, wy) {
         // Find landed blobs near the pressed world position
         const nearby = this.projs.filter(
-            p => p.landed && Math.hypot(p.x - wx, p.y - wy) < TELEPORT_RADIUS
+            p => p.landed && Math.hypot(p.x - wx, p.y - wy) < TAKE_CONTROL_RADIUS
         );
         if (nearby.length === 0) return;
 
-        // Centre of the target group
-        const gx = nearby.reduce((s, p) => s + p.x, 0) / nearby.length;
-        const gy = nearby.reduce((s, p) => s + p.y, 0) / nearby.length;
-
-        // Teleport all player blobs, preserving their offsets relative to cluster centre
-        const c = this._center();
+        // Leave current blobs behind as landed projectiles (player loses them)
         for (const b of this.blobs) {
-            b.x  = gx + (b.x - c.x);
-            b.y  = gy + (b.y - c.y);
-            b.vx *= 0.1;
-            b.vy *= 0.1;
+            this.projs.push({
+                x: b.x, y: b.y,
+                vx: 0, vy: 0,
+                radius: BLOB_R,
+                trail : [],
+                phase : b.phase,
+                pSpeed: b.pSpeed,
+                onGround: b.onGround,
+                landed  : true,
+            });
         }
 
-        // Absorb the nearby landed blobs into the cluster
+        // Take control of the nearby landed blob group
         const nearbySet = new Set(nearby);
         this.projs = this.projs.filter(p => !nearbySet.has(p));
-        for (const p of nearby) {
-            this.blobs.push(this._makeBlob(p.x, p.y, 0, 0));
-        }
+        this.blobs = nearby.map(p => this._makeBlob(p.x, p.y, 0, 0));
 
         this.cameras.main.shake(60, 0.008);
     }
@@ -666,24 +733,21 @@ class GameScene extends Phaser.Scene {
         }
 
         // ─── Input: drag-to-slide movement ───
-        // Keyboard arrows / WASD apply directional force; touch drag does the same.
+        // Keyboard A/D/arrows apply horizontal force only – no upward lift.
         const movingLeft  = this.keys.left.isDown || this.keys.a.isDown;
         const movingRight = this.keys.right.isDown || this.keys.d.isDown;
-        const movingUp    = this.keys.up.isDown || this.keys.w.isDown;
 
         for (const b of this.blobs) {
-            // Gravity
+            // Gravity (heavy – blobs are weighed down and cannot fly)
             b.vy += GRAVITY * dt;
 
-            // Keyboard directional input
+            // Horizontal keyboard input only
             if (movingLeft)  b.vx -= MOVE_FORCE * dt;
             if (movingRight) b.vx += MOVE_FORCE * dt;
-            if (movingUp)    b.vy -= MOVE_FORCE * dt;
 
-            // Touch drag input (applies force in drag direction)
+            // Touch drag input: only apply horizontal component to prevent flying
             if (this._isDragging) {
                 b.vx += this._dragDir.x * MOVE_FORCE * dt;
-                b.vy += this._dragDir.y * MOVE_FORCE * dt;
             }
 
             // Friction
@@ -1340,7 +1404,7 @@ class GameScene extends Phaser.Scene {
         const inGroup = new Set();
         for (let i = 0; i < landed.length; i++) {
             for (let j = i + 1; j < landed.length; j++) {
-                if (Math.hypot(landed[i].x - landed[j].x, landed[i].y - landed[j].y) < GROUP_PROXIMITY_RAD) {
+                if (Math.hypot(landed[i].x - landed[j].x, landed[i].y - landed[j].y) < TAKE_CONTROL_GROUP_RAD) {
                     inGroup.add(landed[i]);
                     inGroup.add(landed[j]);
                 }
@@ -1538,7 +1602,7 @@ class GameScene extends Phaser.Scene {
 
         // Check if there are landed blobs nearby (teleport target)
         const hasTarget = this.projs.some(
-            p => p.landed && Math.hypot(p.x - wx, p.y - wy) < TELEPORT_RADIUS
+            p => p.landed && Math.hypot(p.x - wx, p.y - wy) < TAKE_CONTROL_RADIUS
         );
         const ringCol = hasTarget ? 0x00ffcc : 0x88bbcc;
 
@@ -1585,7 +1649,7 @@ class GameScene extends Phaser.Scene {
             fontStyle: 'bold', stroke: '#000', strokeThickness: 3
         }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(D);
 
-        this.txtHint = this.add.text(W / 2, H - 105, 'Drag to slide  ·  Tap to shoot blobs  ·  Long-press landed blobs to teleport', {
+        this.txtHint = this.add.text(W / 2, H - 105, 'Drag / A / D to slide  ·  Tap to shoot 1 blob  ·  Long-press landed blobs to take control', {
             fontSize: '13px', fill: '#99aabb', fontFamily: 'monospace'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(D);
         this.time.delayedCall(6000, () =>
@@ -1816,7 +1880,7 @@ class TitleScene extends Phaser.Scene {
         }).setOrigin(0.5).setDepth(10);
 
         this.add.text(W / 2, H / 2 + 32,
-            'Drag to slide  ·  Tap to shoot blobs  ·  Long-press landed blobs to teleport',
+            'Drag / A / D to slide  ·  Tap to shoot 1 blob  ·  Long-press landed blobs to take control',
             { fontSize: '13px', fill: '#556677', fontFamily: 'monospace' }
         ).setOrigin(0.5).setDepth(10);
 
