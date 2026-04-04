@@ -29,8 +29,31 @@ const DRAG_FORCE         = 0.015; // continuous-drag force coefficient
 // ── Power-up constants ────────────────────────────────────────────────────────
 const POWERUP_INTERVAL   = 18000; // ms between power-up spawns
 const POWERUP_DURATION   = 6000;  // ms the speed boost lasts
-const POWERUP_SPEED_MULT = 2.0;   // speed multiplier during boost
+const POWERUP_SPEED_MULT = 1.4;   // speed multiplier during boost (moderate)
 const POWERUP_FRICTION   = 0.91;  // velocity decay during boost (less damping than FRICTION=0.87)
+
+// ── Split-shot constants ──────────────────────────────────────────────────────
+const SPLIT_SHOT_CHARGES = 3;     // uses granted per split-shot pickup
+const SPLIT_FAN_COUNT    = 4;     // extra spread blobs per split shot
+const SPLIT_BLOB_SPEED   = 14;    // launch speed of spread blobs
+
+// ── Grenade constants ─────────────────────────────────────────────────────────
+const GRENADE_COUNT    = 2;       // grenades granted per pickup
+const GRENADE_FRAGS    = 8;       // yellow blobs per explosion
+const GRENADE_FRAG_SPD = 10;      // spread speed of grenade fragments
+const GRENADE_FUSE     = 1200;    // ms before grenade explodes automatically
+
+// ── Landmine constants ────────────────────────────────────────────────────────
+const MINE_COUNT      = 5;        // mines granted per pickup
+const MINE_ARM_DELAY  = 800;      // ms before a dropped mine arms itself
+const MINE_BLAST_R    = 85;       // radius at which armed mine triggers
+const MINE_FRAGS      = 6;        // yellow blobs per mine explosion
+const MINE_FRAG_SPD   = 9;        // spread speed of mine fragments
+const MINE_LIFE       = 15000;    // ms before mine expires un-triggered
+const MINE_DROP_INTERVAL = 1200;  // ms between auto-drops while moving
+
+// ── Spread-blob constants (yellow uncollectible blobs) ────────────────────────
+const SPREAD_BLOB_LIFE = 3500;    // ms before a spread blob fades out
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C_PLAYER    = 0x00dd77;
@@ -38,7 +61,11 @@ const C_PLAYER_HI = 0x22ff99;
 const C_PROJ      = 0x00ee55;  // green (was yellow 0xddff00)
 const C_ENEMY     = 0xdd2200;
 const C_PICKUP    = 0x00cc55;
-const C_POWERUP   = 0xcc44ff;  // purple for power-up pickups
+const C_POWERUP   = 0xcc44ff;  // purple for speed power-up
+const C_SPLIT_PU  = 0xffee00;  // yellow for split-shot power-up
+const C_GRENADE_PU= 0xff6600;  // orange for grenade power-up
+const C_MINE_PU   = 0xaa7733;  // brown for landmine power-up
+const C_SPREAD    = 0xffdd00;  // yellow for uncollectible spread blobs
 
 // =============================================================================
 //  Accomplishment system
@@ -128,6 +155,17 @@ class GameScene extends Phaser.Scene {
         this.enemySpawnTimer = null;
         this.speedBoostTimer = 0;     // ms remaining on speed-boost power-up
 
+        // Power-up inventory
+        this.splitShotCharges  = 0;   // remaining split-shot uses
+        this.grenadeCount      = 0;   // grenades in inventory
+        this.landminesRemaining= 0;   // landmines left to auto-drop
+        this.landmineDropTimer = 0;   // ms until next auto-drop
+
+        // Active power-up projectiles & placed objects
+        this.spreadBlobs   = [];  // yellow uncollectible blobs (split/grenade/mine)
+        this.grenadeProjs  = [];  // in-flight grenade objects
+        this.landmines     = [];  // placed landmine objects
+
         // Accomplishment tracking (reset each game)
         this.killCount       = 0;
         this.pickupCount     = 0;
@@ -146,8 +184,10 @@ class GameScene extends Phaser.Scene {
         this.gSlime  = this.add.graphics().setDepth(1);
         this.gPickup = this.add.graphics().setDepth(2);
         this.gPowerup = this.add.graphics().setDepth(2);
+        this.gMines  = this.add.graphics().setDepth(3);
         this.gBlob   = this.add.graphics().setDepth(3);
         this.gProj   = this.add.graphics().setDepth(4);
+        this.gSpread = this.add.graphics().setDepth(4);
         this.gEnemy  = this.add.graphics().setDepth(5);
         this.gFx     = this.add.graphics().setDepth(6);
 
@@ -253,16 +293,38 @@ class GameScene extends Phaser.Scene {
 
     // ── Shooting ──────────────────────────────────────────────────────────────
     _shoot(tx, ty) {
-        if (this.dead || this.blobs.length <= 1) return;
+        if (this.dead) return;
 
         const c   = this._center();
         const dx  = tx - c.x, dy = ty - c.y;
         const len = Math.hypot(dx, dy) || 1;
+        const nx  = dx / len, ny = dy / len;
+
+        // ── Grenade takes priority (no blob cost) ──────────────────────────────
+        if (this.grenadeCount > 0) {
+            this.grenadeCount--;
+            const spd = 9;
+            this.grenadeProjs.push({
+                x : c.x + nx * BLOB_R * 2,
+                y : c.y + ny * BLOB_R * 2,
+                vx: nx * spd,
+                vy: ny * spd,
+                radius: BLOB_R * 0.8,
+                t0    : this.time.now,
+                phase : Math.random() * Math.PI * 2,
+                pSpeed: 0.08,
+                trail : []
+            });
+            return;
+        }
+
+        // ── Need at least one blob to shoot ────────────────────────────────────
+        if (this.blobs.length <= 1) return;
 
         // Pick the sub-blob most aligned with the target direction
         let best = null, bestDot = -Infinity;
         for (const b of this.blobs) {
-            const dot = (b.x - c.x) * dx / len + (b.y - c.y) * dy / len;
+            const dot = (b.x - c.x) * nx + (b.y - c.y) * ny;
             if (dot > bestDot) { bestDot = dot; best = b; }
         }
         if (!best) return;
@@ -270,8 +332,8 @@ class GameScene extends Phaser.Scene {
         this.blobs = this.blobs.filter(b => b !== best);
         this.projs.push({
             x : best.x, y : best.y,
-            vx: dx / len * SHOOT_V + best.vx,
-            vy: dy / len * SHOOT_V + best.vy,
+            vx: nx * SHOOT_V + best.vx,
+            vy: ny * SHOOT_V + best.vy,
             radius : BLOB_R,
             t0     : this.time.now,
             trail  : [],
@@ -279,6 +341,41 @@ class GameScene extends Phaser.Scene {
             pSpeed : best.pSpeed,
             reunite: false
         });
+
+        // ── Split shot: fire fan of yellow uncollectible spread blobs ──────────
+        if (this.splitShotCharges > 0) {
+            this.splitShotCharges--;
+            const origin = { x: best.x, y: best.y };
+            for (let i = 0; i < SPLIT_FAN_COUNT; i++) {
+                // Spread across ±40° around the main shot direction
+                const angleOffset = ((i / (SPLIT_FAN_COUNT - 1)) - 0.5) * (Math.PI * 80 / 180);
+                const cos = Math.cos(angleOffset), sin = Math.sin(angleOffset);
+                const svx = nx * cos - ny * sin;
+                const svy = nx * sin + ny * cos;
+                this._spawnSpreadBlob(origin.x, origin.y, svx * SPLIT_BLOB_SPEED, svy * SPLIT_BLOB_SPEED);
+            }
+        }
+    }
+
+    /** Spawn one yellow uncollectible spread blob */
+    _spawnSpreadBlob(x, y, vx, vy) {
+        this.spreadBlobs.push({
+            x, y, vx, vy,
+            radius : BLOB_R * 0.85,
+            life   : SPREAD_BLOB_LIFE,
+            phase  : Math.random() * Math.PI * 2,
+            pSpeed : 0.05 + Math.random() * 0.04,
+            trail  : []
+        });
+    }
+
+    /** Detonate a point, spawning FRAGS spread blobs in all directions */
+    _explode(x, y, frags, fragSpd) {
+        for (let i = 0; i < frags; i++) {
+            const a   = (Math.PI * 2 * i / frags) + Math.random() * 0.4;
+            const spd = fragSpd * (0.7 + Math.random() * 0.6);
+            this._spawnSpreadBlob(x, y, Math.cos(a) * spd, Math.sin(a) * spd);
+        }
     }
 
     // ── Accomplishment helpers ─────────────────────────────────────────────────
@@ -413,13 +510,15 @@ class GameScene extends Phaser.Scene {
     _spawnPowerup() {
         if (this.dead) return;
         const W = this.scale.width, H = this.scale.height;
+        const types = ['speed', 'split', 'grenade', 'landmine'];
+        const type  = types[Math.floor(Math.random() * types.length)];
         this.powerups.push({
             x     : 80 + Math.random() * (W - 160),
             y     : 80 + Math.random() * (H - 160),
             radius: BLOB_R * 1.0,
             pulse : 0,
             life  : 12000,
-            type  : 'speed'
+            type
         });
     }
 
@@ -487,6 +586,9 @@ class GameScene extends Phaser.Scene {
         this._stepProjs(dt, time);
         this._stepEnemies(dt);
         this._stepPickups(dt);
+        this._stepSpreadBlobs(dt);
+        this._stepGrenadeProjs(dt, time);
+        this._stepLandmines(dt, time);
 
         this._collideProjs();
         this._collideEnemyBlobs();
@@ -494,6 +596,9 @@ class GameScene extends Phaser.Scene {
         this._collidePickups();
         this._collidePowerups();
         this._reuniteProjs();
+        this._collideSpreadBlobs();
+        this._collideGrenadeProjs(time);
+        this._collideLandmines();
 
         // Trigger wave-complete when all enemies are cleared AND none left in queue
         if (this.waveActive && this.enemies.length === 0 && this.enemyQueue.length === 0) {
@@ -696,6 +801,85 @@ class GameScene extends Phaser.Scene {
         }
     }
 
+    _stepSpreadBlobs(dt) {
+        const W = this.scale.width, H = this.scale.height;
+        for (const s of this.spreadBlobs) {
+            s.trail.unshift({ x: s.x, y: s.y });
+            if (s.trail.length > 6) s.trail.pop();
+
+            s.vx *= 0.97;  s.vy *= 0.97;
+            s.x  += s.vx * dt;  s.y += s.vy * dt;
+            s.phase += s.pSpeed * dt;
+            s.life  -= dt * 16.667;
+
+            // Soft wall bounce
+            if (s.x < s.radius)     { s.x = s.radius;     s.vx =  Math.abs(s.vx) * 0.4; }
+            if (s.x > W - s.radius) { s.x = W - s.radius; s.vx = -Math.abs(s.vx) * 0.4; }
+            if (s.y < s.radius)     { s.y = s.radius;     s.vy =  Math.abs(s.vy) * 0.4; }
+            if (s.y > H - s.radius) { s.y = H - s.radius; s.vy = -Math.abs(s.vy) * 0.4; }
+        }
+        this.spreadBlobs = this.spreadBlobs.filter(s => s.life > 0);
+    }
+
+    _stepGrenadeProjs(dt, now) {
+        const W = this.scale.width, H = this.scale.height;
+        const toExplode = [];
+        for (const g of this.grenadeProjs) {
+            g.trail.unshift({ x: g.x, y: g.y });
+            if (g.trail.length > 8) g.trail.pop();
+
+            g.vx *= 0.98;  g.vy *= 0.98;
+            g.x  += g.vx * dt;  g.y += g.vy * dt;
+            g.phase += g.pSpeed * dt;
+
+            // Wall bounce
+            if (g.x < g.radius)     { g.x = g.radius;     g.vx =  Math.abs(g.vx) * 0.5; }
+            if (g.x > W - g.radius) { g.x = W - g.radius; g.vx = -Math.abs(g.vx) * 0.5; }
+            if (g.y < g.radius)     { g.y = g.radius;     g.vy =  Math.abs(g.vy) * 0.5; }
+            if (g.y > H - g.radius) { g.y = H - g.radius; g.vy = -Math.abs(g.vy) * 0.5; }
+
+            // Fuse timer
+            if (now - g.t0 >= GRENADE_FUSE) {
+                toExplode.push(g);
+            }
+        }
+        for (const g of toExplode) {
+            this._explode(g.x, g.y, GRENADE_FRAGS, GRENADE_FRAG_SPD);
+        }
+        this.grenadeProjs = this.grenadeProjs.filter(g => !toExplode.includes(g));
+    }
+
+    _stepLandmines(dt, now) {
+        // Auto-drop mines while landminesRemaining > 0
+        if (this.landminesRemaining > 0 && this.blobs.length > 0) {
+            this.landmineDropTimer -= dt * 16.667;
+            if (this.landmineDropTimer <= 0) {
+                this.landmineDropTimer = MINE_DROP_INTERVAL;
+                this.landminesRemaining--;
+                const c = this._center();
+                this.landmines.push({
+                    x      : c.x,
+                    y      : c.y,
+                    radius : BLOB_R * 0.9,
+                    armed  : false,
+                    armTimer: MINE_ARM_DELAY,
+                    life   : MINE_LIFE,
+                    pulse  : Math.random() * Math.PI * 2
+                });
+            }
+        }
+
+        for (const m of this.landmines) {
+            m.life  -= dt * 16.667;
+            m.pulse += 0.06 * dt;
+            if (!m.armed) {
+                m.armTimer -= dt * 16.667;
+                if (m.armTimer <= 0) m.armed = true;
+            }
+        }
+        this.landmines = this.landmines.filter(m => m.life > 0);
+    }
+
     // ── Collisions ────────────────────────────────────────────────────────────
     _collideProjs() {
         for (const p of this.projs) {
@@ -816,7 +1000,23 @@ class GameScene extends Phaser.Scene {
             for (const b of this.blobs) {
                 if (Math.hypot(pu.x - b.x, pu.y - b.y) < pu.radius + b.radius + 22) {
                     got.add(i);
-                    this.speedBoostTimer = POWERUP_DURATION;
+                    switch (pu.type) {
+                        case 'speed':
+                            this.speedBoostTimer = POWERUP_DURATION;
+                            break;
+                        case 'split':
+                            this.splitShotCharges += SPLIT_SHOT_CHARGES;
+                            break;
+                        case 'grenade':
+                            this.grenadeCount += GRENADE_COUNT;
+                            break;
+                        case 'landmine':
+                            this.landminesRemaining += MINE_COUNT;
+                            if (this.landmineDropTimer <= 0) {
+                                this.landmineDropTimer = MINE_DROP_INTERVAL;
+                            }
+                            break;
+                    }
                     break;
                 }
             }
@@ -831,6 +1031,69 @@ class GameScene extends Phaser.Scene {
         this.projs = this.projs.filter(p => !p.reunite);
     }
 
+    /** Yellow spread blobs damage enemies on contact */
+    _collideSpreadBlobs() {
+        const dead = new Set();
+        for (let si = 0; si < this.spreadBlobs.length; si++) {
+            const s = this.spreadBlobs[si];
+            for (const e of this.enemies) {
+                if (Math.hypot(e.x - s.x, e.y - s.y) < e.radius + s.radius) {
+                    e.health--;
+                    e.hitTimer = 6;
+                    this.score += 10;
+                    if (e.health <= 0) {
+                        this.score += 50;
+                        this.killCount++;
+                    }
+                    dead.add(si);
+                    break;
+                }
+            }
+        }
+        this.enemies     = this.enemies.filter(e => e.health > 0);
+        this.spreadBlobs = this.spreadBlobs.filter((_, i) => !dead.has(i));
+        this._checkKillAccomplishments();
+        this._checkScoreAccomplishments();
+    }
+
+    /** Grenades explode on touching an enemy OR when their fuse runs out (handled in step) */
+    _collideGrenadeProjs(now) {
+        const toExplode = [];
+        for (const g of this.grenadeProjs) {
+            for (const e of this.enemies) {
+                if (Math.hypot(e.x - g.x, e.y - g.y) < e.radius + g.radius * 2) {
+                    toExplode.push(g);
+                    break;
+                }
+            }
+        }
+        for (const g of toExplode) {
+            this._explode(g.x, g.y, GRENADE_FRAGS, GRENADE_FRAG_SPD);
+        }
+        this.grenadeProjs = this.grenadeProjs.filter(g => !toExplode.includes(g));
+    }
+
+    /** Armed landmines trigger when an enemy comes within MINE_BLAST_R */
+    _collideLandmines() {
+        const triggered = new Set();
+        for (let mi = 0; mi < this.landmines.length; mi++) {
+            const m = this.landmines[mi];
+            if (!m.armed) continue;
+            for (const e of this.enemies) {
+                if (Math.hypot(e.x - m.x, e.y - m.y) < MINE_BLAST_R + e.radius) {
+                    triggered.add(mi);
+                    break;
+                }
+            }
+        }
+        for (const mi of triggered) {
+            const m = this.landmines[mi];
+            this._explode(m.x, m.y, MINE_FRAGS, MINE_FRAG_SPD);
+            this.cameras.main.shake(120, 0.007);
+        }
+        this.landmines = this.landmines.filter((_, i) => !triggered.has(i));
+    }
+
     // ── Rendering ─────────────────────────────────────────────────────────────
     _draw(time) {
         this.gSlime.clear();
@@ -838,6 +1101,8 @@ class GameScene extends Phaser.Scene {
         this.gPickup.clear();
         this.gPowerup.clear();
         this.gProj.clear();
+        this.gSpread.clear();
+        this.gMines.clear();
         this.gBlob.clear();
         this.gFx.clear();
 
@@ -845,7 +1110,10 @@ class GameScene extends Phaser.Scene {
         this._drawEnemies();
         this._drawPickups();
         this._drawPowerups();
+        this._drawLandmines();
         this._drawProjs();
+        this._drawGrenadeProjs();
+        this._drawSpreadBlobs();
         this._drawBlobs();
         this._drawDragHint();
     }
@@ -1001,26 +1269,106 @@ class GameScene extends Phaser.Scene {
         for (const pu of this.powerups) {
             const r    = pu.radius * (1 + 0.25 * Math.sin(pu.pulse));
             const spin = pu.pulse * 0.8;
+
+            // Pick colours based on power-up type
+            let col, hiCol;
+            switch (pu.type) {
+                case 'split':   col = C_SPLIT_PU;   hiCol = 0xffffaa; break;
+                case 'grenade': col = C_GRENADE_PU;  hiCol = 0xffcc88; break;
+                case 'landmine':col = C_MINE_PU;     hiCol = 0xddbb88; break;
+                default:        col = C_POWERUP;     hiCol = 0xeeccff; break; // speed
+            }
+
             // Outer pulsing glow
-            g.fillStyle(C_POWERUP, 0.12);
+            g.fillStyle(col, 0.12);
             g.fillCircle(pu.x, pu.y, r * 3.0);
             // Mid ring
-            g.fillStyle(C_POWERUP, 0.22);
+            g.fillStyle(col, 0.22);
             g.fillCircle(pu.x, pu.y, r * 2.0);
             // Core body
-            g.fillStyle(C_POWERUP, 0.90);
+            g.fillStyle(col, 0.90);
             g.fillCircle(pu.x, pu.y, r);
             // Specular highlight
-            g.fillStyle(0xeeccff, 0.65);
+            g.fillStyle(hiCol, 0.65);
             g.fillCircle(pu.x - r * 0.3, pu.y - r * 0.3, r * 0.3);
             // Spinning star points (4 small dots)
             for (let j = 0; j < 4; j++) {
                 const a  = spin + (Math.PI / 2) * j;
                 const ox = pu.x + Math.cos(a) * r * 1.55;
                 const oy = pu.y + Math.sin(a) * r * 1.55;
-                g.fillStyle(0xeeccff, 0.80);
+                g.fillStyle(hiCol, 0.80);
                 g.fillCircle(ox, oy, r * 0.22);
             }
+        }
+    }
+
+    _drawSpreadBlobs() {
+        const g = this.gSpread;
+        for (const s of this.spreadBlobs) {
+            const alpha = Math.min(1, s.life / 800);  // fade in last 800ms
+            // Motion trail
+            for (let t = 0; t < s.trail.length; t++) {
+                const tr = s.trail[t];
+                const a  = (1 - t / s.trail.length) * 0.35 * alpha;
+                const r  = s.radius * (1 - t / s.trail.length) * 0.5;
+                if (r < 1) continue;
+                g.fillStyle(C_SPREAD, a);
+                g.fillCircle(tr.x, tr.y, r);
+            }
+            // Glow
+            g.fillStyle(0xffffff, 0.08 * alpha);
+            g.fillCircle(s.x, s.y, s.radius * 2);
+            // Body
+            const w = Math.sin(s.phase) * 0.1;
+            g.fillStyle(C_SPREAD, 0.88 * alpha);
+            g.fillEllipse(s.x, s.y, (1 + w) * s.radius * 2, (1 - w) * s.radius * 2);
+            // Highlight
+            g.fillStyle(0xffffa0, 0.6 * alpha);
+            g.fillCircle(s.x - s.radius * 0.3, s.y - s.radius * 0.3, s.radius * 0.3);
+        }
+    }
+
+    _drawGrenadeProjs() {
+        const g = this.gProj;
+        for (const gr of this.grenadeProjs) {
+            // Trail
+            for (let t = 0; t < gr.trail.length; t++) {
+                const tr = gr.trail[t];
+                const a  = (1 - t / gr.trail.length) * 0.5;
+                const r  = gr.radius * (1 - t / gr.trail.length) * 0.7;
+                if (r < 1) continue;
+                g.fillStyle(C_GRENADE_PU, a);
+                g.fillCircle(tr.x, tr.y, r);
+            }
+            // Glow
+            g.fillStyle(0xff8800, 0.18);
+            g.fillCircle(gr.x, gr.y, gr.radius * 2.2);
+            // Body
+            const w = Math.sin(gr.phase) * 0.12;
+            g.fillStyle(C_GRENADE_PU, 0.95);
+            g.fillEllipse(gr.x, gr.y, (1 + w) * gr.radius * 2, (1 - w) * gr.radius * 2);
+            // Core dot
+            g.fillStyle(0xffdd00, 0.9);
+            g.fillCircle(gr.x, gr.y, gr.radius * 0.4);
+        }
+    }
+
+    _drawLandmines() {
+        const g = this.gMines;
+        for (const m of this.landmines) {
+            const r    = m.radius * (1 + (m.armed ? 0.18 : 0.06) * Math.sin(m.pulse));
+            const col  = m.armed ? 0xff4400 : 0xaa7733;
+            const glow = m.armed ? 0.28 : 0.10;
+            // Outer ring (more vivid when armed)
+            g.fillStyle(col, glow);
+            g.fillCircle(m.x, m.y, r * 2.4);
+            // Body
+            g.fillStyle(col, 0.85);
+            g.fillCircle(m.x, m.y, r);
+            // Crosshair lines (just two small dots for simplicity)
+            g.fillStyle(m.armed ? 0xffdd00 : 0xddbb88, 0.9);
+            g.fillRect(m.x - r * 0.8, m.y - r * 0.12, r * 1.6, r * 0.24);
+            g.fillRect(m.x - r * 0.12, m.y - r * 0.8, r * 0.24, r * 1.6);
         }
     }
 
@@ -1055,6 +1403,11 @@ class GameScene extends Phaser.Scene {
 
         this.txtPowerup = this.add.text(16, 72, '', {
             fontSize: '18px', fill: '#cc44ff', fontFamily: 'monospace',
+            stroke: '#000000', strokeThickness: 2
+        }).setDepth(D);
+
+        this.txtInventory = this.add.text(16, 96, '', {
+            fontSize: '15px', fill: '#ffee00', fontFamily: 'monospace',
             stroke: '#000000', strokeThickness: 2
         }).setDepth(D);
 
@@ -1111,6 +1464,14 @@ class GameScene extends Phaser.Scene {
         } else {
             this.txtPowerup.setText('');
         }
+
+        // Power-up inventory display
+        const parts = [];
+        if (this.splitShotCharges > 0)  parts.push(`✦ SPLIT ×${this.splitShotCharges}`);
+        if (this.grenadeCount > 0)       parts.push(`💣 GRENADE ×${this.grenadeCount}`);
+        if (this.landminesRemaining > 0) parts.push(`💥 MINES ×${this.landminesRemaining}`);
+        if (this.landmines.length > 0)   parts.push(`[${this.landmines.length} placed]`);
+        this.txtInventory.setText(parts.join('  '));
     }
 }
 
