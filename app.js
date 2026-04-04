@@ -65,6 +65,7 @@ const C_POWERUP   = 0xcc44ff;  // purple for speed power-up
 const C_SPLIT_PU  = 0xffee00;  // yellow for split-shot power-up
 const C_GRENADE_PU= 0xff6600;  // orange for grenade power-up
 const C_MINE_PU   = 0xaa7733;  // brown for landmine power-up
+const C_MINE_ARMED= 0xff4400;  // vivid red-orange when a mine is armed
 const C_SPREAD    = 0xffdd00;  // yellow for uncollectible spread blobs
 
 // =============================================================================
@@ -1061,7 +1062,7 @@ class GameScene extends Phaser.Scene {
         const toExplode = [];
         for (const g of this.grenadeProjs) {
             for (const e of this.enemies) {
-                if (Math.hypot(e.x - g.x, e.y - g.y) < e.radius + g.radius * 2) {
+                if (Math.hypot(e.x - g.x, e.y - g.y) < e.radius + g.radius) {
                     toExplode.push(g);
                     break;
                 }
@@ -1357,7 +1358,7 @@ class GameScene extends Phaser.Scene {
         const g = this.gMines;
         for (const m of this.landmines) {
             const r    = m.radius * (1 + (m.armed ? 0.18 : 0.06) * Math.sin(m.pulse));
-            const col  = m.armed ? 0xff4400 : 0xaa7733;
+            const col  = m.armed ? C_MINE_ARMED : C_MINE_PU;
             const glow = m.armed ? 0.28 : 0.10;
             // Outer ring (more vivid when armed)
             g.fillStyle(col, glow);
@@ -1365,8 +1366,8 @@ class GameScene extends Phaser.Scene {
             // Body
             g.fillStyle(col, 0.85);
             g.fillCircle(m.x, m.y, r);
-            // Crosshair lines (just two small dots for simplicity)
-            g.fillStyle(m.armed ? 0xffdd00 : 0xddbb88, 0.9);
+            // Crosshair lines
+            g.fillStyle(m.armed ? C_SPREAD : 0xddbb88, 0.9);
             g.fillRect(m.x - r * 0.8, m.y - r * 0.12, r * 1.6, r * 0.24);
             g.fillRect(m.x - r * 0.12, m.y - r * 0.8, r * 0.24, r * 1.6);
         }
