@@ -58,6 +58,7 @@ const SPREAD_BLOB_LIFE = 3500;    // ms before a spread blob fades out
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C_PLAYER    = 0x00dd77;
 const C_PLAYER_HI = 0x22ff99;
+const C_PLAYER_CORE = 0xffcc22; // amber-gold for the center-most "nucleus" blob
 const C_PROJ      = 0x00ee55;  // green (was yellow 0xddff00)
 const C_ENEMY     = 0xdd2200;
 const C_PICKUP    = 0x00cc55;
@@ -1135,19 +1136,63 @@ class GameScene extends Phaser.Scene {
     }
 
     _drawBlobs() {
+        if (!this.blobs.length) return;
         const g = this.gBlob;
+        const c = this._center();
+
+        // Find the blob closest to the cluster centre — the amber "nucleus"
+        let coreBlob = this.blobs[0];
+        let coreDist = Infinity;
         for (const b of this.blobs) {
-            const w = Math.sin(b.phase) * 0.08;
+            const d = Math.hypot(b.x - c.x, b.y - c.y);
+            if (d < coreDist) { coreDist = d; coreBlob = b; }
+        }
+
+        for (const b of this.blobs) {
+            const w      = Math.sin(b.phase) * 0.08;
+            const isCore = b === coreBlob;
+            const col    = isCore ? C_PLAYER_CORE : C_PLAYER;
+            const hiCol  = isCore ? 0xffeeaa : 0xaaffdd;
+            const glowCol= isCore ? C_PLAYER_CORE : C_PLAYER_HI;
+
             // Soft outer glow
-            g.fillStyle(C_PLAYER_HI, 0.12);
+            g.fillStyle(glowCol, 0.13);
             g.fillCircle(b.x, b.y, b.radius * 1.7);
             // Main body (slightly squished for wobbly feel)
-            g.fillStyle(C_PLAYER, 0.88);
+            g.fillStyle(col, 0.88);
             g.fillEllipse(b.x, b.y, (1 + w) * b.radius * 2, (1 - w) * b.radius * 2);
             // Specular highlight
-            g.fillStyle(0xaaffdd, 0.55);
+            g.fillStyle(hiCol, 0.55);
             g.fillCircle(b.x - b.radius * 0.3, b.y - b.radius * 0.32, b.radius * 0.32);
         }
+
+        // Draw a cute face at the cluster centre, on top of all blobs
+        this._drawBlobFace(g, c.x, c.y);
+    }
+
+    _drawBlobFace(g, cx, cy) {
+        if (this.blobs.length < 1) return;
+        const r = BLOB_R;
+
+        // Eyes — dark pupils with a tiny shine
+        const eyeOffX = r * 0.34, eyeOffY = r * 0.26;
+        const eyeR    = r * 0.18;
+        g.fillStyle(0x001100, 0.9);
+        g.fillCircle(cx - eyeOffX, cy - eyeOffY, eyeR);
+        g.fillCircle(cx + eyeOffX, cy - eyeOffY, eyeR);
+        // Eye highlights
+        g.fillStyle(0xffffff, 0.75);
+        g.fillCircle(cx - eyeOffX + eyeR * 0.4, cy - eyeOffY - eyeR * 0.3, eyeR * 0.38);
+        g.fillCircle(cx + eyeOffX + eyeR * 0.4, cy - eyeOffY - eyeR * 0.3, eyeR * 0.38);
+
+        // Smile — arc drawn as short line-style stroke
+        const smileR = r * 0.32;
+        const startA = Math.PI * 0.18;  // ~32° from horizontal
+        const endA   = Math.PI * 0.82;  // ~148°
+        g.lineStyle(Math.max(1.5, r * 0.13), 0x001100, 0.85);
+        g.beginPath();
+        g.arc(cx, cy + r * 0.08, smileR, startA, endA, false);
+        g.strokePath();
     }
 
     _drawProjs() {
