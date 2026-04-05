@@ -18,6 +18,7 @@ const SHOOT_V      = 15;    // launch speed
 const RETURN_AFTER = 1800;  // ms before a miss starts returning
 const RETURN_K     = 0.10;  // pull-back acceleration
 const REUNITE_D    = BLOB_R * 2.2; // distance to cluster to rejoin
+const PROJ_TIMEOUT = 10000; // ms after which a returning projectile expires
 
 // ── Game constants ────────────────────────────────────────────────────────────
 const N_START            = 10;    // starting sub-blobs
@@ -38,7 +39,7 @@ const SPLIT_FAN_COUNT    = 4;     // extra spread blobs per split shot
 const SPLIT_BLOB_SPEED   = 14;    // launch speed of spread blobs
 
 // ── Grenade constants ─────────────────────────────────────────────────────────
-const GRENADE_COUNT    = 2;       // grenades granted per pickup
+const GRENADE_COUNT    = 5;       // grenades granted per pickup
 const GRENADE_FRAGS    = 8;       // yellow blobs per explosion
 const GRENADE_FRAG_SPD = 10;      // spread speed of grenade fragments
 const GRENADE_FUSE     = 1200;    // ms before grenade explodes automatically
@@ -55,19 +56,25 @@ const MINE_DROP_INTERVAL = 1200;  // ms between auto-drops while moving
 // ── Spread-blob constants (yellow uncollectible blobs) ────────────────────────
 const SPREAD_BLOB_LIFE = 3500;    // ms before a spread blob fades out
 
+// ── Blob colour-zone thresholds (distance ratio from cluster centre) ──────────
+const BLOB_CORE_RATIO  = 0.2; // ratio below which a blob is coloured deep blue
+const BLOB_INNER_RATIO = 0.5; // ratio below which a blob is coloured medium blue
+
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C_PLAYER    = 0x00dd77;
 const C_PLAYER_HI = 0x22ff99;
-const C_PLAYER_CORE = 0xffcc22; // amber-gold for the center-most "nucleus" blob
-const C_PROJ      = 0x00ee55;  // green (was yellow 0xddff00)
+const C_PLAYER_CORE = 0x0055ff; // deep blue for the center-most nucleus blob
+const C_PLAYER_MID  = 0x0099dd; // medium blue for inner-ring blobs
+const C_PROJ      = 0x00ee55;  // green (non-returning projectile)
+const C_PROJ_RETURN = 0xffdd00; // yellow for returning projectiles
 const C_ENEMY     = 0xdd2200;
 const C_PICKUP    = 0x00cc55;
 const C_POWERUP   = 0xcc44ff;  // purple for speed power-up
-const C_SPLIT_PU  = 0xffee00;  // yellow for split-shot power-up
-const C_GRENADE_PU= 0xff6600;  // orange for grenade power-up
-const C_MINE_PU   = 0xaa7733;  // brown for landmine power-up
-const C_MINE_ARMED= 0xff4400;  // vivid red-orange when a mine is armed
-const C_SPREAD    = 0xffdd00;  // yellow for uncollectible spread blobs
+const C_SPLIT_PU  = 0x00eeff;  // cyan for split-shot power-up
+const C_GRENADE_PU= 0x44aaff;  // light blue for grenade power-up
+const C_MINE_PU   = 0x6688ff;  // periwinkle for landmine power-up
+const C_MINE_ARMED= 0x00ccff;  // bright cyan when a mine is armed
+const C_SPREAD    = 0x44ddff;  // teal/cyan for uncollectible spread blobs
 
 // =============================================================================
 //  Accomplishment system
@@ -699,11 +706,17 @@ class GameScene extends Phaser.Scene {
 
             // Pull back after delay, or immediately if forceReturn is set
             if (now - p.t0 > RETURN_AFTER || p.forceReturn) {
+                p.returning = true;
                 const dx = c.x - p.x, dy = c.y - p.y;
                 const d  = Math.hypot(dx, dy) || 0.001;
                 p.vx += dx / d * RETURN_K * dt;
                 p.vy += dy / d * RETURN_K * dt;
                 if (d < REUNITE_D) p.reunite = true;
+            }
+
+            // Hard timeout — blob disappears if it hasn't returned within PROJ_TIMEOUT
+            if (now - p.t0 > PROJ_TIMEOUT) {
+                p.expired = true;
             }
 
             p.vx *= 0.98;  p.vy *= 0.98;
@@ -1030,7 +1043,8 @@ class GameScene extends Phaser.Scene {
         for (const p of this.projs.filter(p => p.reunite)) {
             this.blobs.push(this._makeBlob(p.x, p.y, p.vx * 0.3, p.vy * 0.3));
         }
-        this.projs = this.projs.filter(p => !p.reunite);
+        // expired blobs are discarded without rejoining
+        this.projs = this.projs.filter(p => !p.reunite && !p.expired);
     }
 
     /** Yellow spread blobs damage enemies on contact */
@@ -1140,20 +1154,32 @@ class GameScene extends Phaser.Scene {
         const g = this.gBlob;
         const c = this._center();
 
-        // Find the blob closest to the cluster centre — the amber "nucleus"
-        let coreBlob = this.blobs[0];
-        let coreDist = Infinity;
-        for (const b of this.blobs) {
+        // Build per-blob distance-from-centre for colour grading
+        // (blue = inner/centre, green = outer)
+        let maxDist = 0;
+        const blobDists = this.blobs.map(b => {
             const d = Math.hypot(b.x - c.x, b.y - c.y);
-            if (d < coreDist) { coreDist = d; coreBlob = b; }
-        }
+            if (d > maxDist) maxDist = d;
+            return d;
+        });
+        if (maxDist < 1) maxDist = 1;
 
-        for (const b of this.blobs) {
-            const w      = Math.sin(b.phase) * 0.08;
-            const isCore = b === coreBlob;
-            const col    = isCore ? C_PLAYER_CORE : C_PLAYER;
-            const hiCol  = isCore ? 0xffeeaa : 0xaaffdd;
-            const glowCol= isCore ? C_PLAYER_CORE : C_PLAYER_HI;
+        for (let bi = 0; bi < this.blobs.length; bi++) {
+            const b     = this.blobs[bi];
+            const ratio = blobDists[bi] / maxDist;  // 0 = centre, 1 = outermost
+            const w     = Math.sin(b.phase) * 0.08;
+
+            let col, hiCol, glowCol;
+            if (ratio < BLOB_CORE_RATIO) {
+                // Centre-most: deep blue
+                col = C_PLAYER_CORE; hiCol = 0x88bbff; glowCol = C_PLAYER_CORE;
+            } else if (ratio < BLOB_INNER_RATIO) {
+                // Inner ring: medium blue
+                col = C_PLAYER_MID;  hiCol = 0x99ddff; glowCol = C_PLAYER_MID;
+            } else {
+                // Outer blobs: green (unchanged)
+                col = C_PLAYER;      hiCol = 0xaaffdd; glowCol = C_PLAYER_HI;
+            }
 
             // Soft outer glow
             g.fillStyle(glowCol, 0.13);
@@ -1198,13 +1224,14 @@ class GameScene extends Phaser.Scene {
     _drawProjs() {
         const g = this.gProj;
         for (const p of this.projs) {
+            const drawCol = p.returning ? C_PROJ_RETURN : C_PROJ;
             // Motion trail
             for (let t = 0; t < p.trail.length; t++) {
                 const tr = p.trail[t];
                 const a  = (1 - t / p.trail.length) * 0.4;
                 const r  = p.radius * (1 - t / p.trail.length) * 0.6;
                 if (r < 1) continue;
-                g.fillStyle(C_PROJ, a);
+                g.fillStyle(drawCol, a);
                 g.fillCircle(tr.x, tr.y, r);
             }
             // Glow
@@ -1212,7 +1239,7 @@ class GameScene extends Phaser.Scene {
             g.fillCircle(p.x, p.y, p.radius * 2);
             // Body
             const w = Math.sin(p.phase) * 0.1;
-            g.fillStyle(C_PROJ, 0.92);
+            g.fillStyle(drawCol, 0.92);
             g.fillEllipse(p.x, p.y, (1 + w) * p.radius * 2, (1 - w) * p.radius * 2);
             // Highlight
             g.fillStyle(0xffffff, 0.65);
@@ -1319,9 +1346,9 @@ class GameScene extends Phaser.Scene {
             // Pick colours based on power-up type
             let col, hiCol;
             switch (pu.type) {
-                case 'split':   col = C_SPLIT_PU;   hiCol = 0xffffaa; break;
-                case 'grenade': col = C_GRENADE_PU;  hiCol = 0xffcc88; break;
-                case 'landmine':col = C_MINE_PU;     hiCol = 0xddbb88; break;
+                case 'split':   col = C_SPLIT_PU;   hiCol = 0xaaffff; break;
+                case 'grenade': col = C_GRENADE_PU;  hiCol = 0xaaccff; break;
+                case 'landmine':col = C_MINE_PU;     hiCol = 0xaaccff; break;
                 default:        col = C_POWERUP;     hiCol = 0xeeccff; break; // speed
             }
 
@@ -1369,7 +1396,7 @@ class GameScene extends Phaser.Scene {
             g.fillStyle(C_SPREAD, 0.88 * alpha);
             g.fillEllipse(s.x, s.y, (1 + w) * s.radius * 2, (1 - w) * s.radius * 2);
             // Highlight
-            g.fillStyle(0xffffa0, 0.6 * alpha);
+            g.fillStyle(0xaaffff, 0.6 * alpha);
             g.fillCircle(s.x - s.radius * 0.3, s.y - s.radius * 0.3, s.radius * 0.3);
         }
     }
@@ -1387,14 +1414,14 @@ class GameScene extends Phaser.Scene {
                 g.fillCircle(tr.x, tr.y, r);
             }
             // Glow
-            g.fillStyle(0xff8800, 0.18);
+            g.fillStyle(0x0088ff, 0.18);
             g.fillCircle(gr.x, gr.y, gr.radius * 2.2);
             // Body
             const w = Math.sin(gr.phase) * 0.12;
             g.fillStyle(C_GRENADE_PU, 0.95);
             g.fillEllipse(gr.x, gr.y, (1 + w) * gr.radius * 2, (1 - w) * gr.radius * 2);
             // Core dot
-            g.fillStyle(0xffdd00, 0.9);
+            g.fillStyle(0x88ccff, 0.9);
             g.fillCircle(gr.x, gr.y, gr.radius * 0.4);
         }
     }
