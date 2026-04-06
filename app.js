@@ -168,7 +168,7 @@ class GameScene extends Phaser.Scene {
         this.shockwaveFireTimer= 0;   // ms until next shockwave pulse
 
         // Active power-up projectiles & placed objects
-        this.spreadBlobs   = [];  // teal uncollectible blobs (split/grenade)
+        this.spreadBlobs   = [];  // teal uncollectible blobs (split-shot spread, grenade frags)
         this.grenadeProjs  = [];  // in-flight grenade objects
         this.shockwaves    = [];  // active expanding shockwave rings
 
@@ -1574,9 +1574,9 @@ class GameScene extends Phaser.Scene {
 
         // Time-based power-up inventory display
         const parts = [];
-        if (this.splitShotTimer  > 0) parts.push(`✦ SPLIT  ${Math.ceil(this.splitShotTimer  / 1000)}s`);
-        if (this.grenadeTimer    > 0) parts.push(`💣 GRENADE  ${Math.ceil(this.grenadeTimer    / 1000)}s`);
-        if (this.shockwaveTimer  > 0) parts.push(`⚡ SHOCKWAVE  ${Math.ceil(this.shockwaveTimer  / 1000)}s`);
+        if (this.splitShotTimer  > 0) parts.push(`✦ SPLIT ${Math.ceil(this.splitShotTimer  / 1000)}s`);
+        if (this.grenadeTimer    > 0) parts.push(`💣 GRENADE ${Math.ceil(this.grenadeTimer    / 1000)}s`);
+        if (this.shockwaveTimer  > 0) parts.push(`⚡ SHOCKWAVE ${Math.ceil(this.shockwaveTimer  / 1000)}s`);
         this.txtInventory.setText(parts.join('  '));
     }
 }
