@@ -34,24 +34,22 @@ const POWERUP_SPEED_MULT = 1.4;   // speed multiplier during boost (moderate)
 const POWERUP_FRICTION   = 0.91;  // velocity decay during boost (less damping than FRICTION=0.87)
 
 // ── Split-shot constants ──────────────────────────────────────────────────────
-const SPLIT_SHOT_CHARGES = 3;     // uses granted per split-shot pickup
-const SPLIT_FAN_COUNT    = 4;     // extra spread blobs per split shot
-const SPLIT_BLOB_SPEED   = 14;    // launch speed of spread blobs
+const SPLIT_SHOT_DURATION = 7000;  // ms the split-shot power-up lasts (time-based)
+const SPLIT_FAN_COUNT     = 4;     // extra spread blobs per split shot
+const SPLIT_BLOB_SPEED    = 14;    // launch speed of spread blobs
 
 // ── Grenade constants ─────────────────────────────────────────────────────────
-const GRENADE_COUNT    = 5;       // grenades granted per pickup
-const GRENADE_FRAGS    = 8;       // yellow blobs per explosion
-const GRENADE_FRAG_SPD = 10;      // spread speed of grenade fragments
-const GRENADE_FUSE     = 1200;    // ms before grenade explodes automatically
+const GRENADE_DURATION = 8000;     // ms the grenade power-up lasts (time-based)
+const GRENADE_FRAGS    = 8;        // spread blobs per explosion
+const GRENADE_FRAG_SPD = 10;       // spread speed of grenade fragments
+const GRENADE_FUSE     = 1200;     // ms before grenade explodes automatically
 
-// ── Landmine constants ────────────────────────────────────────────────────────
-const MINE_COUNT      = 5;        // mines granted per pickup
-const MINE_ARM_DELAY  = 800;      // ms before a dropped mine arms itself
-const MINE_BLAST_R    = 85;       // radius at which armed mine triggers
-const MINE_FRAGS      = 6;        // yellow blobs per mine explosion
-const MINE_FRAG_SPD   = 9;        // spread speed of mine fragments
-const MINE_LIFE       = 15000;    // ms before mine expires un-triggered
-const MINE_DROP_INTERVAL = 1200;  // ms between auto-drops while moving
+// ── Shockwave constants (replaces landmines) ──────────────────────────────────
+const SHOCKWAVE_DURATION = 7000;  // ms the shockwave power-up lasts (time-based)
+const SHOCKWAVE_INTERVAL = 1800;  // ms between auto-fired shockwave pulses
+const SHOCKWAVE_MAX_R    = 210;   // max radius the shockwave ring expands to
+const SHOCKWAVE_SPEED    = 6;     // px per dt-unit expansion speed
+const SHOCKWAVE_RING_W   = 22;    // ring width used for collision detection
 
 // ── Spread-blob constants (yellow uncollectible blobs) ────────────────────────
 const SPREAD_BLOB_LIFE = 3500;    // ms before a spread blob fades out
@@ -66,14 +64,13 @@ const C_PLAYER_HI = 0x22ff99;
 const C_PLAYER_CORE = 0x0055ff; // deep blue for the center-most nucleus blob
 const C_PLAYER_MID  = 0x0099dd; // medium blue for inner-ring blobs
 const C_PROJ      = 0x00ee55;  // green (non-returning projectile)
-const C_PROJ_RETURN = 0xffdd00; // yellow for returning projectiles
 const C_ENEMY     = 0xdd2200;
 const C_PICKUP    = 0x00cc55;
 const C_POWERUP   = 0xcc44ff;  // purple for speed power-up
 const C_SPLIT_PU  = 0x00eeff;  // cyan for split-shot power-up
 const C_GRENADE_PU= 0x44aaff;  // light blue for grenade power-up
-const C_MINE_PU   = 0x6688ff;  // periwinkle for landmine power-up
-const C_MINE_ARMED= 0x00ccff;  // bright cyan when a mine is armed
+const C_SHOCK_PU  = 0x6688ff;  // periwinkle for shockwave power-up
+const C_SHOCKWAVE = 0x00ffee;  // bright teal for shockwave ring
 const C_SPREAD    = 0x44ddff;  // teal/cyan for uncollectible spread blobs
 
 // =============================================================================
@@ -164,16 +161,16 @@ class GameScene extends Phaser.Scene {
         this.enemySpawnTimer = null;
         this.speedBoostTimer = 0;     // ms remaining on speed-boost power-up
 
-        // Power-up inventory
-        this.splitShotCharges  = 0;   // remaining split-shot uses
-        this.grenadeCount      = 0;   // grenades in inventory
-        this.landminesRemaining= 0;   // landmines left to auto-drop
-        this.landmineDropTimer = 0;   // ms until next auto-drop
+        // Power-up inventory (all time-based)
+        this.splitShotTimer    = 0;   // ms remaining on split-shot power-up
+        this.grenadeTimer      = 0;   // ms remaining on grenade power-up
+        this.shockwaveTimer    = 0;   // ms remaining on shockwave power-up
+        this.shockwaveFireTimer= 0;   // ms until next shockwave pulse
 
         // Active power-up projectiles & placed objects
-        this.spreadBlobs   = [];  // yellow uncollectible blobs (split/grenade/mine)
+        this.spreadBlobs   = [];  // teal uncollectible blobs (split-shot spread, grenade frags)
         this.grenadeProjs  = [];  // in-flight grenade objects
-        this.landmines     = [];  // placed landmine objects
+        this.shockwaves    = [];  // active expanding shockwave rings
 
         // Accomplishment tracking (reset each game)
         this.killCount       = 0;
@@ -310,8 +307,7 @@ class GameScene extends Phaser.Scene {
         const nx  = dx / len, ny = dy / len;
 
         // ── Grenade takes priority (no blob cost) ──────────────────────────────
-        if (this.grenadeCount > 0) {
-            this.grenadeCount--;
+        if (this.grenadeTimer > 0) {
             const spd = 9;
             this.grenadeProjs.push({
                 x : c.x + nx * BLOB_R * 2,
@@ -351,9 +347,8 @@ class GameScene extends Phaser.Scene {
             reunite: false
         });
 
-        // ── Split shot: fire fan of yellow uncollectible spread blobs ──────────
-        if (this.splitShotCharges > 0) {
-            this.splitShotCharges--;
+        // ── Split shot: fire fan of teal uncollectible spread blobs ───────────
+        if (this.splitShotTimer > 0) {
             const origin = { x: best.x, y: best.y };
             for (let i = 0; i < SPLIT_FAN_COUNT; i++) {
                 // Spread across ±40° around the main shot direction
@@ -519,7 +514,7 @@ class GameScene extends Phaser.Scene {
     _spawnPowerup() {
         if (this.dead) return;
         const W = this.scale.width, H = this.scale.height;
-        const types = ['speed', 'split', 'grenade', 'landmine'];
+        const types = ['speed', 'split', 'grenade', 'shockwave'];
         const type  = types[Math.floor(Math.random() * types.length)];
         this.powerups.push({
             x     : 80 + Math.random() * (W - 160),
@@ -590,6 +585,7 @@ class GameScene extends Phaser.Scene {
     update(time, delta) {
         if (this.dead) return;
         const dt = normDt(delta); // normalized to 60 fps
+        this.gameTime = time;     // store for use in rendering
 
         this._stepBlobs(dt);
         this._stepProjs(dt, time);
@@ -597,7 +593,7 @@ class GameScene extends Phaser.Scene {
         this._stepPickups(dt);
         this._stepSpreadBlobs(dt);
         this._stepGrenadeProjs(dt, time);
-        this._stepLandmines(dt, time);
+        this._stepShockwaves(dt);
 
         this._collideProjs();
         this._collideEnemyBlobs();
@@ -607,7 +603,7 @@ class GameScene extends Phaser.Scene {
         this._reuniteProjs();
         this._collideSpreadBlobs();
         this._collideGrenadeProjs(time);
-        this._collideLandmines();
+        this._collideShockwaves();
 
         // Trigger wave-complete when all enemies are cleared AND none left in queue
         if (this.waveActive && this.enemies.length === 0 && this.enemyQueue.length === 0) {
@@ -809,11 +805,12 @@ class GameScene extends Phaser.Scene {
         }
         this.powerups = this.powerups.filter(pu => pu.life > 0);
 
-        // Tick speed-boost timer
-        if (this.speedBoostTimer > 0) {
-            this.speedBoostTimer -= dt * 16.667;
-            if (this.speedBoostTimer < 0) this.speedBoostTimer = 0;
-        }
+        // Tick all time-based power-up timers
+        const ms = dt * 16.667;
+        if (this.speedBoostTimer  > 0) this.speedBoostTimer  = Math.max(0, this.speedBoostTimer  - ms);
+        if (this.splitShotTimer   > 0) this.splitShotTimer   = Math.max(0, this.splitShotTimer   - ms);
+        if (this.grenadeTimer     > 0) this.grenadeTimer     = Math.max(0, this.grenadeTimer     - ms);
+        if (this.shockwaveTimer   > 0) this.shockwaveTimer   = Math.max(0, this.shockwaveTimer   - ms);
     }
 
     _stepSpreadBlobs(dt) {
@@ -864,35 +861,27 @@ class GameScene extends Phaser.Scene {
         this.grenadeProjs = this.grenadeProjs.filter(g => !toExplode.includes(g));
     }
 
-    _stepLandmines(dt, now) {
-        // Auto-drop mines while landminesRemaining > 0
-        if (this.landminesRemaining > 0 && this.blobs.length > 0) {
-            this.landmineDropTimer -= dt * 16.667;
-            if (this.landmineDropTimer <= 0) {
-                this.landmineDropTimer = MINE_DROP_INTERVAL;
-                this.landminesRemaining--;
+    _stepShockwaves(dt) {
+        // Auto-fire shockwave pulses while power-up is active
+        if (this.shockwaveTimer > 0 && this.blobs.length > 0) {
+            this.shockwaveFireTimer -= dt * 16.667;
+            if (this.shockwaveFireTimer <= 0) {
+                this.shockwaveFireTimer = SHOCKWAVE_INTERVAL;
                 const c = this._center();
-                this.landmines.push({
-                    x      : c.x,
-                    y      : c.y,
-                    radius : BLOB_R * 0.9,
-                    armed  : false,
-                    armTimer: MINE_ARM_DELAY,
-                    life   : MINE_LIFE,
-                    pulse  : Math.random() * Math.PI * 2
+                this.shockwaves.push({
+                    x: c.x, y: c.y,
+                    r: 0,
+                    maxR: SHOCKWAVE_MAX_R,
+                    hitEnemies: new Set()
                 });
             }
         }
 
-        for (const m of this.landmines) {
-            m.life  -= dt * 16.667;
-            m.pulse += 0.06 * dt;
-            if (!m.armed) {
-                m.armTimer -= dt * 16.667;
-                if (m.armTimer <= 0) m.armed = true;
-            }
+        // Expand shockwave rings
+        for (const sw of this.shockwaves) {
+            sw.r += SHOCKWAVE_SPEED * dt;
         }
-        this.landmines = this.landmines.filter(m => m.life > 0);
+        this.shockwaves = this.shockwaves.filter(sw => sw.r < sw.maxR);
     }
 
     // ── Collisions ────────────────────────────────────────────────────────────
@@ -1020,16 +1009,14 @@ class GameScene extends Phaser.Scene {
                             this.speedBoostTimer = POWERUP_DURATION;
                             break;
                         case 'split':
-                            this.splitShotCharges += SPLIT_SHOT_CHARGES;
+                            this.splitShotTimer = SPLIT_SHOT_DURATION;
                             break;
                         case 'grenade':
-                            this.grenadeCount += GRENADE_COUNT;
+                            this.grenadeTimer = GRENADE_DURATION;
                             break;
-                        case 'landmine':
-                            this.landminesRemaining += MINE_COUNT;
-                            if (this.landmineDropTimer <= 0) {
-                                this.landmineDropTimer = MINE_DROP_INTERVAL;
-                            }
+                        case 'shockwave':
+                            this.shockwaveTimer = SHOCKWAVE_DURATION;
+                            this.shockwaveFireTimer = 0; // fire first pulse immediately
                             break;
                     }
                     break;
@@ -1089,28 +1076,56 @@ class GameScene extends Phaser.Scene {
         this.grenadeProjs = this.grenadeProjs.filter(g => !toExplode.includes(g));
     }
 
-    /** Armed landmines trigger when an enemy comes within MINE_BLAST_R */
-    _collideLandmines() {
-        const triggered = new Set();
-        for (let mi = 0; mi < this.landmines.length; mi++) {
-            const m = this.landmines[mi];
-            if (!m.armed) continue;
+    /** Expanding shockwave rings damage each enemy once as the ring passes through */
+    _collideShockwaves() {
+        for (const sw of this.shockwaves) {
             for (const e of this.enemies) {
-                if (Math.hypot(e.x - m.x, e.y - m.y) < MINE_BLAST_R + e.radius) {
-                    triggered.add(mi);
-                    break;
+                if (sw.hitEnemies.has(e)) continue;
+                const dist = Math.hypot(e.x - sw.x, e.y - sw.y);
+                if (Math.abs(dist - sw.r) < SHOCKWAVE_RING_W + e.radius * 0.6) {
+                    sw.hitEnemies.add(e);
+                    e.health--;
+                    e.hitTimer = 6;
+                    this.score += 10;
+                    if (e.health <= 0) {
+                        this.score += 50;
+                        this.killCount++;
+                    }
                 }
             }
         }
-        for (const mi of triggered) {
-            const m = this.landmines[mi];
-            this._explode(m.x, m.y, MINE_FRAGS, MINE_FRAG_SPD);
-            this.cameras.main.shake(120, 0.007);
-        }
-        this.landmines = this.landmines.filter((_, i) => !triggered.has(i));
+        this.enemies = this.enemies.filter(e => e.health > 0);
+        this._checkKillAccomplishments();
+        this._checkScoreAccomplishments();
     }
 
     // ── Rendering ─────────────────────────────────────────────────────────────
+
+    /** Draw a regular polygon (e.g. octagon, square, diamond) */
+    _drawPolygon(g, x, y, r, sides, rotation = 0) {
+        g.beginPath();
+        for (let i = 0; i < sides; i++) {
+            const a = rotation + (Math.PI * 2 * i / sides);
+            if (i === 0) g.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+            else         g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+        }
+        g.closePath();
+        g.fillPath();
+    }
+
+    /** Draw a 5-pointed star */
+    _drawStar5(g, x, y, outerR, innerR, rotation = 0) {
+        g.beginPath();
+        for (let i = 0; i < 10; i++) {
+            const a = rotation + (Math.PI * i / 5) - Math.PI / 2;
+            const r = i % 2 === 0 ? outerR : innerR;
+            if (i === 0) g.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+            else         g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+        }
+        g.closePath();
+        g.fillPath();
+    }
+
     _draw(time) {
         this.gSlime.clear();
         this.gEnemy.clear();
@@ -1126,7 +1141,7 @@ class GameScene extends Phaser.Scene {
         this._drawEnemies();
         this._drawPickups();
         this._drawPowerups();
-        this._drawLandmines();
+        this._drawShockwaves();
         this._drawProjs();
         this._drawGrenadeProjs();
         this._drawSpreadBlobs();
@@ -1224,25 +1239,31 @@ class GameScene extends Phaser.Scene {
     _drawProjs() {
         const g = this.gProj;
         for (const p of this.projs) {
-            const drawCol = p.returning ? C_PROJ_RETURN : C_PROJ;
+            // Returning: stay green but fade out so player knows to collect them
+            let alpha = 1;
+            if (p.returning) {
+                const elapsed = (this.gameTime || 0) - (p.t0 + RETURN_AFTER);
+                const window  = PROJ_TIMEOUT - RETURN_AFTER;
+                alpha = Math.max(0.12, 1 - (elapsed / window) * 0.88);
+            }
             // Motion trail
             for (let t = 0; t < p.trail.length; t++) {
                 const tr = p.trail[t];
-                const a  = (1 - t / p.trail.length) * 0.4;
+                const a  = (1 - t / p.trail.length) * 0.4 * alpha;
                 const r  = p.radius * (1 - t / p.trail.length) * 0.6;
                 if (r < 1) continue;
-                g.fillStyle(drawCol, a);
+                g.fillStyle(C_PROJ, a);
                 g.fillCircle(tr.x, tr.y, r);
             }
             // Glow
-            g.fillStyle(0xffffff, 0.12);
+            g.fillStyle(0xffffff, 0.12 * alpha);
             g.fillCircle(p.x, p.y, p.radius * 2);
             // Body
             const w = Math.sin(p.phase) * 0.1;
-            g.fillStyle(drawCol, 0.92);
+            g.fillStyle(C_PROJ, 0.92 * alpha);
             g.fillEllipse(p.x, p.y, (1 + w) * p.radius * 2, (1 - w) * p.radius * 2);
             // Highlight
-            g.fillStyle(0xffffff, 0.65);
+            g.fillStyle(0xffffff, 0.65 * alpha);
             g.fillCircle(p.x - p.radius * 0.3, p.y - p.radius * 0.3, p.radius * 0.3);
         }
     }
@@ -1261,38 +1282,48 @@ class GameScene extends Phaser.Scene {
         }
 
         for (const e of this.enemies) {
-            const ew = Math.sin(e.phase) * 0.09;
+            const rot = e.phase; // rotation driven by phase for slight wobble effect
 
             if (e.type === 'fast') {
-                // Fast enemies: vivid crimson/blood-red, smaller, pointy-ish
+                // Fast enemies: spiky 5-pointed star in crimson/blood-red
                 const col = e.hitTimer > 0 ? 0xffffff : 0xdd0033;
-                g.fillStyle(0x880011, 0.25);
-                g.fillCircle(e.x, e.y, e.radius * 1.8);
+                // Glow
+                g.fillStyle(0x880011, 0.22);
+                this._drawStar5(g, e.x, e.y, e.radius * 2.0, e.radius * 0.9, rot);
+                // Main star body
                 g.fillStyle(col, 0.92);
-                g.fillEllipse(e.x, e.y, (1 + ew * 1.5) * e.radius * 2, (1 - ew * 1.5) * e.radius * 2);
-                g.fillStyle(0xff4466, 0.5);
-                g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.28);
+                this._drawStar5(g, e.x, e.y, e.radius * 1.0, e.radius * 0.45, rot);
+                // Inner bright centre
+                g.fillStyle(0xff4466, 0.6);
+                this._drawStar5(g, e.x, e.y, e.radius * 0.45, e.radius * 0.2, rot + 0.3);
             } else if (e.type === 'shooter') {
-                // Shooter enemies: deep orange/yellow with a crosshair dot
+                // Shooter enemies: diamond (rotated square) in orange with crosshair
                 const col = e.hitTimer > 0 ? 0xffffff : 0xff8800;
-                g.fillStyle(0xff6600, 0.16);
-                g.fillCircle(e.x, e.y, e.radius * 1.7);
-                g.fillStyle(col, 0.9);
-                g.fillEllipse(e.x, e.y, (1 + ew) * e.radius * 2, (1 - ew) * e.radius * 2);
-                // Inner dot indicator
+                // Glow
+                g.fillStyle(0xff6600, 0.18);
+                this._drawPolygon(g, e.x, e.y, e.radius * 2.0, 4, rot + Math.PI / 4);
+                // Main diamond body
+                g.fillStyle(col, 0.92);
+                this._drawPolygon(g, e.x, e.y, e.radius * 1.0, 4, rot + Math.PI / 4);
+                // Inner crosshair dot
                 g.fillStyle(0xffee00, 0.85);
-                g.fillCircle(e.x, e.y, e.radius * 0.35);
-                g.fillStyle(0xffcc44, 0.5);
-                g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.28);
+                g.fillCircle(e.x, e.y, e.radius * 0.28);
+                // Crosshair lines
+                g.fillStyle(0xffdd00, 0.6);
+                g.fillRect(e.x - e.radius * 0.7, e.y - e.radius * 0.08, e.radius * 1.4, e.radius * 0.16);
+                g.fillRect(e.x - e.radius * 0.08, e.y - e.radius * 0.7, e.radius * 0.16, e.radius * 1.4);
             } else {
-                // Normal enemies: classic red
+                // Normal enemies: octagon in classic red
                 const col = e.hitTimer > 0 ? 0xffffff : C_ENEMY;
-                g.fillStyle(0xff3300, 0.14);
-                g.fillCircle(e.x, e.y, e.radius * 1.6);
-                g.fillStyle(col, 0.9);
-                g.fillEllipse(e.x, e.y, (1 + ew) * e.radius * 2, (1 - ew) * e.radius * 2);
-                g.fillStyle(0xff8866, 0.4);
-                g.fillCircle(e.x - e.radius * 0.25, e.y - e.radius * 0.3, e.radius * 0.3);
+                // Glow
+                g.fillStyle(0xff3300, 0.15);
+                this._drawPolygon(g, e.x, e.y, e.radius * 1.85, 8, rot);
+                // Main octagon body
+                g.fillStyle(col, 0.92);
+                this._drawPolygon(g, e.x, e.y, e.radius * 1.0, 8, rot);
+                // Inner highlight facet
+                g.fillStyle(0xff8866, 0.45);
+                this._drawPolygon(g, e.x - e.radius * 0.18, e.y - e.radius * 0.22, e.radius * 0.35, 8, rot);
             }
 
             // Health pips (shown for enemies with more than 1 hp)
@@ -1310,15 +1341,16 @@ class GameScene extends Phaser.Scene {
     _drawPickups() {
         const g = this.gPickup;
         for (const pk of this.pickups) {
-            const r = pk.radius * (1 + 0.2 * Math.sin(pk.pulse));
+            const r         = pk.radius * (1 + 0.2 * Math.sin(pk.pulse));
+            const fadeAlpha = pk.life > 3000 ? 1 : Math.max(0.05, pk.life / 3000);
             // Outer ring
-            g.fillStyle(C_PICKUP, 0.13);
+            g.fillStyle(C_PICKUP, 0.13 * fadeAlpha);
             g.fillCircle(pk.x, pk.y, r * 2.5);
             // Body
-            g.fillStyle(C_PICKUP, 0.75);
+            g.fillStyle(C_PICKUP, 0.75 * fadeAlpha);
             g.fillCircle(pk.x, pk.y, r);
             // Highlight
-            g.fillStyle(0xaaffcc, 0.6);
+            g.fillStyle(0xaaffcc, 0.6 * fadeAlpha);
             g.fillCircle(pk.x - r * 0.3, pk.y - r * 0.3, r * 0.3);
             // Orbiting mini-blobs indicate how many blobs will be granted
             const count = pk.blobCount || 1;
@@ -1330,7 +1362,7 @@ class GameScene extends Phaser.Scene {
                     const a  = (Math.PI * 2 * j / shown) + pk.pulse * 0.5;
                     const ox = pk.x + Math.cos(a) * orbitR;
                     const oy = pk.y + Math.sin(a) * orbitR;
-                    g.fillStyle(C_PICKUP, 0.55);
+                    g.fillStyle(C_PICKUP, 0.55 * fadeAlpha);
                     g.fillCircle(ox, oy, miniR);
                 }
             }
@@ -1340,36 +1372,37 @@ class GameScene extends Phaser.Scene {
     _drawPowerups() {
         const g = this.gPowerup;
         for (const pu of this.powerups) {
-            const r    = pu.radius * (1 + 0.25 * Math.sin(pu.pulse));
-            const spin = pu.pulse * 0.8;
+            const r         = pu.radius * (1 + 0.25 * Math.sin(pu.pulse));
+            const spin      = pu.pulse * 0.8;
+            const fadeAlpha = pu.life > 3000 ? 1 : Math.max(0.05, pu.life / 3000);
 
             // Pick colours based on power-up type
             let col, hiCol;
             switch (pu.type) {
-                case 'split':   col = C_SPLIT_PU;   hiCol = 0xaaffff; break;
-                case 'grenade': col = C_GRENADE_PU;  hiCol = 0xaaccff; break;
-                case 'landmine':col = C_MINE_PU;     hiCol = 0xaaccff; break;
-                default:        col = C_POWERUP;     hiCol = 0xeeccff; break; // speed
+                case 'split':    col = C_SPLIT_PU;  hiCol = 0xaaffff; break;
+                case 'grenade':  col = C_GRENADE_PU; hiCol = 0xaaccff; break;
+                case 'shockwave':col = C_SHOCK_PU;   hiCol = 0xaaccff; break;
+                default:         col = C_POWERUP;    hiCol = 0xeeccff; break; // speed
             }
 
             // Outer pulsing glow
-            g.fillStyle(col, 0.12);
+            g.fillStyle(col, 0.12 * fadeAlpha);
             g.fillCircle(pu.x, pu.y, r * 3.0);
             // Mid ring
-            g.fillStyle(col, 0.22);
+            g.fillStyle(col, 0.22 * fadeAlpha);
             g.fillCircle(pu.x, pu.y, r * 2.0);
             // Core body
-            g.fillStyle(col, 0.90);
+            g.fillStyle(col, 0.90 * fadeAlpha);
             g.fillCircle(pu.x, pu.y, r);
             // Specular highlight
-            g.fillStyle(hiCol, 0.65);
+            g.fillStyle(hiCol, 0.65 * fadeAlpha);
             g.fillCircle(pu.x - r * 0.3, pu.y - r * 0.3, r * 0.3);
             // Spinning star points (4 small dots)
             for (let j = 0; j < 4; j++) {
                 const a  = spin + (Math.PI / 2) * j;
                 const ox = pu.x + Math.cos(a) * r * 1.55;
                 const oy = pu.y + Math.sin(a) * r * 1.55;
-                g.fillStyle(hiCol, 0.80);
+                g.fillStyle(hiCol, 0.80 * fadeAlpha);
                 g.fillCircle(ox, oy, r * 0.22);
             }
         }
@@ -1426,22 +1459,23 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    _drawLandmines() {
+    _drawShockwaves() {
         const g = this.gMines;
-        for (const m of this.landmines) {
-            const r    = m.radius * (1 + (m.armed ? 0.18 : 0.06) * Math.sin(m.pulse));
-            const col  = m.armed ? C_MINE_ARMED : C_MINE_PU;
-            const glow = m.armed ? 0.28 : 0.10;
-            // Outer ring (more vivid when armed)
-            g.fillStyle(col, glow);
-            g.fillCircle(m.x, m.y, r * 2.4);
-            // Body
-            g.fillStyle(col, 0.85);
-            g.fillCircle(m.x, m.y, r);
-            // Crosshair lines
-            g.fillStyle(m.armed ? C_SPREAD : 0xddbb88, 0.9);
-            g.fillRect(m.x - r * 0.8, m.y - r * 0.12, r * 1.6, r * 0.24);
-            g.fillRect(m.x - r * 0.12, m.y - r * 0.8, r * 0.24, r * 1.6);
+        for (const sw of this.shockwaves) {
+            const progress = sw.r / sw.maxR;  // 0 (new) → 1 (fully expanded)
+            const alpha    = 1 - progress;
+
+            // Outer wide glow ring
+            g.lineStyle(SHOCKWAVE_RING_W * 1.8, C_SHOCKWAVE, alpha * 0.25);
+            g.strokeCircle(sw.x, sw.y, sw.r);
+
+            // Main ring
+            g.lineStyle(SHOCKWAVE_RING_W * 0.75, C_SHOCKWAVE, alpha * 0.80);
+            g.strokeCircle(sw.x, sw.y, sw.r);
+
+            // Bright inner edge
+            g.lineStyle(3, 0xffffff, alpha * 0.55);
+            g.strokeCircle(sw.x, sw.y, sw.r - SHOCKWAVE_RING_W * 0.25);
         }
     }
 
@@ -1538,12 +1572,11 @@ class GameScene extends Phaser.Scene {
             this.txtPowerup.setText('');
         }
 
-        // Power-up inventory display
+        // Time-based power-up inventory display
         const parts = [];
-        if (this.splitShotCharges > 0)  parts.push(`✦ SPLIT ×${this.splitShotCharges}`);
-        if (this.grenadeCount > 0)       parts.push(`💣 GRENADE ×${this.grenadeCount}`);
-        if (this.landminesRemaining > 0) parts.push(`💥 MINES ×${this.landminesRemaining}`);
-        if (this.landmines.length > 0)   parts.push(`[${this.landmines.length} placed]`);
+        if (this.splitShotTimer  > 0) parts.push(`✦ SPLIT ${Math.ceil(this.splitShotTimer  / 1000)}s`);
+        if (this.grenadeTimer    > 0) parts.push(`💣 GRENADE ${Math.ceil(this.grenadeTimer    / 1000)}s`);
+        if (this.shockwaveTimer  > 0) parts.push(`⚡ SHOCKWAVE ${Math.ceil(this.shockwaveTimer  / 1000)}s`);
         this.txtInventory.setText(parts.join('  '));
     }
 }
